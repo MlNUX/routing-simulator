@@ -3,6 +3,11 @@
     console.log('Clear network (dummy)');
   }
 
+  function sendPacket() {
+    // TODO: hook this into SimulationController when you implement packet sending
+    console.log('Send packet (dummy)');
+  }
+
   function zoomIn() {
     console.log('Zoom in (dummy)');
   }
@@ -16,9 +21,17 @@
   }
 </script>
 
-<aside class="right-panel">
+<aside class="left-panel">
   <button class="btn-small-primary" on:click={clearNetwork}>
     Clear network
+  </button>
+
+  <button
+    class="btn-small-primary"
+    style="margin-top: 8px;"
+    on:click={sendPacket}
+  >
+    Send packet
   </button>
 
   <div style="margin-top: 10px;">

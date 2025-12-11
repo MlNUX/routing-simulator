@@ -123,10 +123,11 @@ body {
   cursor: pointer;
 }
 
-.right-panel {
+/* LEFT sidebar (was .right-panel before) */
+.left-panel {
   position: absolute;
   top: 80px;
-  right: 24px;
+  left: 24px;
   bottom: 120px;
   width: 220px;
   z-index: 10;
@@ -326,7 +327,6 @@ body {
 .svelte-flow__pane {
   background-color: #dff3ff !important;
 }
-
 
 .svelte-flow {
   --xy-edge-stroke-default: #0ea5e9;

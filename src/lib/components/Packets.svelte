@@ -11,39 +11,37 @@
     (sim.testPacket ? [sim.testPacket] : []);
 </script>
 
-<div class="packets-panel">
-  {#if routingPackets.length === 0 && testPackets.length === 0}
-    <p class="packets-empty">No packets currently in transit.</p>
-  {/if}
+{#if routingPackets.length > 0 || testPackets.length > 0}
+  <div class="packets-panel">
+    {#if routingPackets.length > 0}
+      <div class="packets-section">
+        <h3>Routing packets</h3>
+        <ul>
+          {#each routingPackets as p}
+            <li>
+              <span class="packet-kind">R</span>
+              <span class="packet-path">{p.sourceId} → {p.targetId}</span>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
 
-  {#if routingPackets.length > 0}
-    <div class="packets-section">
-      <h3>Routing packets</h3>
-      <ul>
-        {#each routingPackets as p}
-          <li>
-            <span class="packet-kind">R</span>
-            <span class="packet-path">{p.sourceId} → {p.targetId}</span>
-          </li>
-        {/each}
-      </ul>
-    </div>
-  {/if}
-
-  {#if testPackets.length > 0}
-    <div class="packets-section">
-      <h3>Test packets</h3>
-      <ul>
-        {#each testPackets as p}
-          <li>
-            <span class="packet-kind packet-kind--test">T</span>
-            <span class="packet-path">{p.sourceId} → {p.targetId}</span>
-          </li>
-        {/each}
-      </ul>
-    </div>
-  {/if}
-</div>
+    {#if testPackets.length > 0}
+      <div class="packets-section">
+        <h3>Test packets</h3>
+        <ul>
+          {#each testPackets as p}
+            <li>
+              <span class="packet-kind packet-kind--test">T</span>
+              <span class="packet-path">{p.sourceId} → {p.targetId}</span>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+  </div>
+{/if}
 
 <style>
   .packets-panel {
@@ -58,11 +56,6 @@
     font-size: 11px;
     box-shadow: 0 4px 8px rgba(15, 23, 42, 0.25);
     z-index: 10;
-  }
-
-  .packets-empty {
-    font-size: 11px;
-    opacity: 0.8;
   }
 
   .packets-section + .packets-section {

@@ -45,7 +45,7 @@
   $: routingEntries = selectedRouter ? extractRoutingEntries(selectedRouter) : [];
 </script>
 
-<div class="router-table-panel">
+<aside class="router-table-panel">
   {#if selectedId}
     <h3>Routing table: {selectedId}</h3>
     {#if routingEntries.length === 0}
@@ -73,22 +73,25 @@
   {:else}
     <p>Select a router to see its routing table.</p>
   {/if}
-</div>
+</aside>
 
 <style>
   .router-table-panel {
     position: absolute;
-    left: 24px;
-    bottom: 120px; /* above the bottom bar */
-    padding: 10px 12px;
-    border-radius: 12px;
+    top: 80px;
+    right: 24px;
+    bottom: 120px;
+    width: 260px;
+    z-index: 10;
+
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    border-radius: 16px;
     background: rgba(223, 243, 255, 0.96);
     box-shadow: 0 8px 16px rgba(15, 23, 42, 0.15);
     font-size: 11px;
-    min-width: 220px;
-    max-height: 220px;
     overflow: auto;
-    z-index: 10;
   }
 
   .router-table-panel h3 {
