@@ -1,33 +1,55 @@
 <script lang="ts">
-  import { simulation } from '$lib/stores/simulation';
+  import { simulation, selectedRouterId } from '$lib/stores/simulation';
 
-  type RoutingEntry = {
+  type RoutingEntryView = {
     destination: string;
     cost: number;
     nextHop: string;
   };
 
-  $: selectedId = $simulation.ui.selectedRouterId;
-  $: nodes = $simulation.engine.nodes;
+  $: controller = $simulation as any;
+  $: sim = controller.simulation ?? controller;
+  $: topology = sim.topology;
 
-  // very simple dummy routing table: every other node as a destination
-  $: routingEntries =
-    selectedId
-      ? (nodes
-          .filter((n: any) => n.id !== selectedId)
-          .map((n: any, index: number): RoutingEntry => ({
-            destination: n.id,
-            cost: index + 1,
-            nextHop: n.id
-          })) as RoutingEntry[])
-      : [];
+  $: selectedId = $selectedRouterId;
+
+  function getRouterById(topology: any, id: string | null) {
+    if (!topology || !id) return null;
+
+    const rawNodes = topology.nodes;
+    const nodesArray = Array.isArray(rawNodes)
+      ? rawNodes
+      : rawNodes instanceof Map
+        ? Array.from(rawNodes.values())
+        : [];
+
+    return nodesArray.find((n: any) => n.id === id) ?? null;
+  }
+
+  function extractRoutingEntries(router: any): RoutingEntryView[] {
+    if (!router?.routingTable?.entries) return [];
+
+    const entries = router.routingTable.entries;
+
+    const rawEntries: any[] =
+      entries instanceof Map ? Array.from(entries.values()) : Object.values(entries);
+
+    return rawEntries.map((e: any): RoutingEntryView => ({
+      destination: e.destinationId ?? e.destination ?? '',
+      cost: e.cost ?? 0,
+      nextHop: e.nextHopId ?? e.nextHop ?? ''
+    }));
+  }
+
+  $: selectedRouter = getRouterById(topology, selectedId);
+  $: routingEntries = selectedRouter ? extractRoutingEntries(selectedRouter) : [];
 </script>
 
 <div class="router-table-panel">
   {#if selectedId}
     <h3>Routing table: {selectedId}</h3>
     {#if routingEntries.length === 0}
-      <p>No entries (dummy).</p>
+      <p>No entries.</p>
     {:else}
       <table>
         <thead>

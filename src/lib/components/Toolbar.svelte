@@ -1,22 +1,28 @@
 <script lang="ts">
   import { notify } from '$lib/notify';
-  import { simulation, setAlgorithm } from '$lib/stores/simulation';
+  import { setAlgorithm } from '$lib/stores/simulation';
 
-  // derived from the store
-  $: currentAlgorithm = $simulation.engine.algorithm;
+  type AlgorithmSelection = 'link' | 'distance' | 'distancePoisoned';
 
-  // declare selected with a type, then set it reactively
-  let selected: 'link' | 'distance' = 'link';
-  $: selected = currentAlgorithm === 'linkState' ? 'link' : 'distance';
+  let selected: AlgorithmSelection = 'link';
 
   async function selectLinkState() {
-    setAlgorithm('linkState');
-    await notify('Link State (dummy)');
+    selected = 'link';
+    // store wrapper maps this to AlgorithmType.LINK_STATE internally
+    setAlgorithm('LINK_STATE');
+    await notify('Link-State algorithm selected');
   }
 
   async function selectDistanceVector() {
-    setAlgorithm('distanceVector');
-    await notify('Distance Vector (dummy)');
+    selected = 'distance';
+    setAlgorithm('DISTANCE_VECTOR');
+    await notify('Distance-Vector algorithm selected');
+  }
+
+  async function selectDistanceVectorPoisoned() {
+    selected = 'distancePoisoned';
+    setAlgorithm('DISTANCE_VECTOR_POISENED');
+    await notify('Distance-Vector (poisoned reverse) algorithm selected');
   }
 
   async function handleChoosePreset() {
@@ -60,6 +66,15 @@
       on:click={selectDistanceVector}
     >
       DISTANCE VECTOR
+    </button>
+
+    <button
+      class={`btn-pill ${
+        selected === 'distancePoisoned' ? 'btn-pill--primary' : 'btn-pill--ghost'
+      }`}
+      on:click={selectDistanceVectorPoisoned}
+    >
+      DISTANCE VECTOR (PR)
     </button>
 
     <button

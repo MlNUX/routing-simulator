@@ -34,7 +34,7 @@
     width: 140px;
     height: 60px;
     border-radius: 18px;
-    background: #0284c7; /* light blue (default) */
+    background: #0284c7;
     color: #ffffff;
     display: flex;
     align-items: center;
@@ -50,9 +50,8 @@
       box-shadow 0.15s ease;
   }
 
-  /* selected router: dark blue */
   .router-node--selected {
-    background: #0b3b63; /* darker blue */
+    background: #0b3b63;
     border-color: #0b3b63;
     box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.35);
   }
@@ -69,7 +68,7 @@
     width: 10px;
     height: 10px;
     border-radius: 999px;
-    background: #ef4444; /* red */
+    background: #ef4444;
     border: 2px solid #f9fafb;
     box-shadow: 0 0 4px rgba(239, 68, 68, 0.7);
   }

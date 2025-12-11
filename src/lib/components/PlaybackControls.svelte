@@ -9,7 +9,14 @@
     reset
   } from '$lib/stores/simulation';
 
-  $: isPlaying = $simulation.ui.isPlaying;
+  // SimulationController instance
+  $: controller = $simulation as any;
+
+  // try to determine playing state from either controller or inner simulation
+  $: isPlaying =
+    !!controller.running ||
+    !!controller.simulation?.running ||
+    false;
 
   function handlePlay() {
     play();

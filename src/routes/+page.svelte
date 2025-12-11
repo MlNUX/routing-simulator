@@ -5,10 +5,13 @@
   import Timeline from '$lib/components/Timeline.svelte';
   import PlaybackControls from '$lib/components/PlaybackControls.svelte';
   import RouterTablePanel from '$lib/components/RouterTablePanel.svelte';
+  import Packets from '$lib/components/Packets.svelte';
 
   import { simulation } from '$lib/stores/simulation';
 
-  $: engine = $simulation.engine;
+  $: controller = $simulation as any;
+  $: sim = controller.simulation ?? controller;
+  $: currentStep = sim.currentStepIndex ?? 0;
 </script>
 
 <div class="canvas-layout">
@@ -25,13 +28,14 @@
   <!-- right palette bar -->
   <RouterPanel />
 
-  <!-- routing-table overlay (no test-packet overlay anymore) -->
+  <!-- overlays -->
   <RouterTablePanel />
+  <Packets />
 
   <!-- bottom bar: current state + timeline + playback controls -->
   <div class="bottom-bar">
     <div class="current-state-pill">
-      Current state: {engine.currentStep}
+      Current state: {currentStep}
     </div>
 
     <Timeline />

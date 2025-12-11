@@ -9,16 +9,48 @@
     router: RouterNode
   };
 
-  // nodes from store, with injected onSelect callback
-  $: nodes = $simulation.engine.nodes.map((node) => ({
-    ...node,
-    data: {
-      ...node.data,
-      onSelect: (id: string) => setSelectedRouter(id)
-    }
-  }));
+  $: controller = $simulation as any;
+  $: sim = controller.simulation ?? controller;
+  $: topology = sim.topology;
 
-  $: edges = $simulation.engine.edges;
+  function mapTopologyNodesToFlowNodes(topology: any) {
+    if (!topology?.nodes) return [];
+
+    const rawNodes = topology.nodes;
+    const nodesArray = Array.isArray(rawNodes)
+      ? rawNodes
+      : rawNodes instanceof Map
+        ? Array.from(rawNodes.values())
+        : [];
+
+    return nodesArray.map((node: any) => ({
+      id: node.id,
+      type: 'router',
+      position: {
+        x: node.xPos ?? 0,
+        y: node.yPos ?? 0
+      },
+      data: {
+        label: node.name ?? node.id,
+        onSelect: (id: string) => setSelectedRouter(id)
+      }
+    }));
+  }
+
+  function mapTopologyLinksToFlowEdges(topology: any) {
+    if (!topology?.links) return [];
+
+    const rawLinks = topology.links;
+    return rawLinks.map((link: any) => ({
+      id: link.id,
+      source: link.source?.id,
+      target: link.target?.id,
+      label: String(link.weight ?? '')
+    }));
+  }
+
+  $: nodes = mapTopologyNodesToFlowNodes(topology);
+  $: edges = mapTopologyLinksToFlowEdges(topology);
 </script>
 
 <SvelteFlow

@@ -1,8 +1,9 @@
 <script lang="ts">
   import { simulation } from '$lib/stores/simulation';
 
-  $: engine = $simulation.engine;
-  $: testPacket = engine.testPacket;
+  $: controller = $simulation as any;
+  $: sim = controller.simulation ?? controller;
+  $: testPacket = sim.testPacket ?? null;
 </script>
 
 {#if testPacket}

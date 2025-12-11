@@ -1,8 +1,11 @@
 <script lang="ts">
-  import { simulation, setCurrentStep } from '$lib/stores/simulation';
+  import { simulation, jumpToStep } from '$lib/stores/simulation';
 
-  $: steps = $simulation.engine.steps;
-  $: currentStep = $simulation.engine.currentStep;
+  $: controller = $simulation as any;
+  $: sim = controller.simulation ?? controller;
+
+  $: steps = sim.history ? sim.history.length : 1;
+  $: currentStep = sim.currentStepIndex ?? 0;
 
   $: knobLeft = steps > 1 ? (currentStep / (steps - 1)) * 100 : 0;
 
@@ -13,7 +16,8 @@
     const x = event.clientX - rect.left;
     const ratio = Math.min(Math.max(x / rect.width, 0), 1);
     const step = Math.round(ratio * (steps - 1));
-    setCurrentStep(step);
+
+    jumpToStep(step);
   }
 </script>
 
