@@ -10,8 +10,7 @@
   import { simulation } from '$lib/stores/simulation';
 
   $: controller = $simulation as any;
-  $: sim = controller.simulation ?? controller;
-  $: currentStep = sim.currentStepIndex ?? 0;
+  $: currentStep = controller.currentStepIndex ?? 0;
 </script>
 
 <div class="canvas-layout">
@@ -25,10 +24,10 @@
     <Toolbar />
   </div>
 
-  <!-- right palette bar -->
+  <!-- left palette bar -->
   <RouterPanel />
 
-  <!-- overlays -->
+  <!-- right routing-table panel & packets overlay -->
   <RouterTablePanel />
   <Packets />
 

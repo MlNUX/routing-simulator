@@ -1,88 +1,79 @@
 <script lang="ts">
-  function clearNetwork() {
+  import { notify } from '$lib/notify';
+  import { placementMode, toggleRouterPlacement } from '$lib/stores/simulation';
+
+  $: currentMode = $placementMode;
+
+  async function handleClearNetwork() {
     console.log('Clear network (dummy)');
+    await notify('Clear network (dummy)');
   }
 
-  function sendPacket() {
-    // TODO: hook this into SimulationController when you implement packet sending
+  async function handleSendPacket() {
     console.log('Send packet (dummy)');
+    await notify('Send packet (dummy)');
   }
 
-  function zoomIn() {
+  function handleZoomIn() {
     console.log('Zoom in (dummy)');
   }
 
-  function zoomOut() {
+  function handleZoomOut() {
     console.log('Zoom out (dummy)');
   }
 
-  function deleteSelection() {
+  function handleDeleteSelection() {
     console.log('Delete selection (dummy)');
   }
 
-  function handleDragStartRouter(event: DragEvent) {
-    // mark this drag as a "router" node for the editor
-    event.dataTransfer?.setData(
-      'application/x-routing-node',
-      JSON.stringify({ kind: 'router' })
-    );
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'copy';
-    }
+  function handleRouterClick() {
+    toggleRouterPlacement();
   }
 </script>
 
 <aside class="left-panel">
-  <button class="btn-small-primary" on:click={clearNetwork}>
+  <button class="btn-small-primary" on:click={handleClearNetwork}>
     Clear network
   </button>
 
   <button
     class="btn-small-primary"
     style="margin-top: 8px;"
-    on:click={sendPacket}
+    on:click={handleSendPacket}
   >
     Send packet
   </button>
 
-  <div style="margin-top: 10px;">
-    <div class="palette-title">Drag and drop to edit network</div>
+  <div style="margin-top: 16px;">
+    <div class="palette-title">Router placement tool</div>
 
     <div class="palette-list">
-      <!-- Router: draggable, used to create new routers in the canvas -->
       <div
-        class="palette-item"
-        draggable="true"
-        on:dragstart={handleDragStartRouter}
+        class={`palette-item ${
+          currentMode === 'router' ? 'palette-item--active' : ''
+        }`}
+        on:click={handleRouterClick}
       >
         <div class="palette-icon palette-icon--router"></div>
-        <div class="palette-label">Router</div>
-      </div>
-
-      <!-- The others are just visual for now, you can wire them later -->
-      <div class="palette-item">
-        <div class="palette-icon palette-icon--switch"></div>
-        <div class="palette-label">Switch</div>
-      </div>
-
-      <div class="palette-item">
-        <div class="palette-icon palette-icon--end"></div>
-        <div class="palette-label">End user</div>
-      </div>
-
-      <div class="palette-item">
-        <div class="palette-icon palette-icon--edge"></div>
-        <div class="palette-label">Edge</div>
+        <div class="palette-label">
+          {currentMode === 'router' ? 'Placing routers…' : 'Router'}
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="right-panel-footer">
+  <div class="left-panel-footer">
     <div class="zoom-row">
-      <button class="zoom-btn" title="Zoom out" on:click={zoomOut}>🔍-</button>
-      <button class="zoom-btn" title="Zoom in" on:click={zoomIn}>🔍+</button>
+      <button class="zoom-btn" title="Zoom out" on:click={handleZoomOut}>
+        🔍-
+      </button>
+      <button class="zoom-btn" title="Zoom in" on:click={handleZoomIn}>
+        🔍+
+      </button>
     </div>
-    <button class="trash-btn" title="Delete" on:click={deleteSelection}>🗑</button>
+    <button class="trash-btn" title="Delete" on:click={handleDeleteSelection}>
+      🗑
+    </button>
   </div>
 </aside>
 

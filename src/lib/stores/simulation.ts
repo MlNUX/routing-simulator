@@ -1,3 +1,4 @@
+// src/lib/stores/simulation.ts
 import { writable } from 'svelte/store';
 
 import { SimulationController } from './SimulationController';
@@ -69,6 +70,20 @@ export const selectedRouterId = writable<string | null>(null);
 
 export function setSelectedRouter(id: string | null): void {
   selectedRouterId.set(id);
+}
+
+// ---------------------------------------------------------------------------
+// Placement mode: "drawing" routers in the canvas
+// ---------------------------------------------------------------------------
+
+export const placementMode = writable<'none' | 'router'>('none');
+
+export function toggleRouterPlacement(): void {
+  placementMode.update((m) => (m === 'router' ? 'none' : 'router'));
+}
+
+export function clearPlacementMode(): void {
+  placementMode.set('none');
 }
 
 // ---------------------------------------------------------------------------
@@ -152,7 +167,7 @@ export function reset(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Topology operations (Editor / future palette)
+// Topology operations (Editor / palette)
 // ---------------------------------------------------------------------------
 
 export function addNode(xPos: number, yPos: number): void {

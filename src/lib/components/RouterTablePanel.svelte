@@ -8,8 +8,11 @@
   };
 
   $: controller = $simulation as any;
-  $: sim = controller.simulation ?? controller;
-  $: topology = sim.topology;
+
+  $: topology =
+    typeof controller.getTopology === 'function'
+      ? controller.getTopology()
+      : controller.topology;
 
   $: selectedId = $selectedRouterId;
 
@@ -45,7 +48,7 @@
   $: routingEntries = selectedRouter ? extractRoutingEntries(selectedRouter) : [];
 </script>
 
-<aside class="router-table-panel">
+<div class="router-table-panel">
   {#if selectedId}
     <h3>Routing table: {selectedId}</h3>
     {#if routingEntries.length === 0}
@@ -73,25 +76,22 @@
   {:else}
     <p>Select a router to see its routing table.</p>
   {/if}
-</aside>
+</div>
 
 <style>
   .router-table-panel {
     position: absolute;
     top: 80px;
     right: 24px;
-    bottom: 120px;
-    width: 260px;
-    z-index: 10;
-
-    display: flex;
-    flex-direction: column;
-    padding: 12px;
-    border-radius: 16px;
+    bottom: 120px; /* leave space for bottom bar */
+    padding: 10px 12px;
+    border-radius: 12px;
     background: rgba(223, 243, 255, 0.96);
     box-shadow: 0 8px 16px rgba(15, 23, 42, 0.15);
     font-size: 11px;
+    min-width: 260px;
     overflow: auto;
+    z-index: 10;
   }
 
   .router-table-panel h3 {

@@ -36,6 +36,12 @@ body {
   z-index: 0;
 }
 
+.editor-drop-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
 .top-bar {
   position: absolute;
   top: 0;
@@ -123,7 +129,7 @@ body {
   cursor: pointer;
 }
 
-/* LEFT sidebar (was .right-panel before) */
+/* LEFT PANEL (palette) */
 .left-panel {
   position: absolute;
   top: 80px;
@@ -168,6 +174,10 @@ body {
   box-shadow: 0 4px 8px rgba(15, 23, 42, 0.15);
 }
 
+.palette-item--active {
+  outline: 2px solid #0f172a;
+}
+
 .palette-icon {
   background: #0ea5e9;
   border-radius: 999px;
@@ -178,27 +188,11 @@ body {
   height: 32px;
 }
 
-.palette-icon--switch {
-  width: 32px;
-  height: 6px;
-}
-
-.palette-icon--end {
-  width: 32px;
-  height: 18px;
-}
-
-.palette-icon--edge {
-  width: 32px;
-  height: 2px;
-  background: #0f172a;
-}
-
 .palette-label {
   font-weight: 600;
 }
 
-.right-panel-footer {
+.left-panel-footer {
   margin-top: auto;
   display: flex;
   align-items: center;
@@ -231,6 +225,8 @@ body {
   cursor: pointer;
 }
 
+/* BOTTOM BAR */
+
 .bottom-bar {
   position: absolute;
   left: 50%;
@@ -256,6 +252,8 @@ body {
   font-weight: 600;
   margin-bottom: 6px;
 }
+
+/* TIMELINE */
 
 .timeline {
   position: relative;
@@ -301,6 +299,8 @@ body {
   box-shadow: 0 0 4px rgba(15, 23, 42, 0.4);
 }
 
+/* PLAYBACK CONTROLS */
+
 .controls-row {
   display: flex;
   justify-content: center;
@@ -322,6 +322,27 @@ body {
 .control-btn:hover {
   filter: brightness(1.05);
 }
+
+/* ROUTER PREVIEW DURING PLACEMENT */
+
+.router-preview {
+  position: absolute;
+  width: 140px;
+  height: 60px;
+  border-radius: 18px;
+  background: rgba(2, 132, 199, 0.7);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  border: 2px dashed #0b3b63;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* SvelteFlow base styling */
 
 .svelte-flow,
 .svelte-flow__pane {

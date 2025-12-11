@@ -1,4 +1,4 @@
-// SimulationController.ts
+// src/lib/stores/SimulationController.ts
 
 import { Topology } from "./Topology";
 import { SimulationState } from "./SimulationState";
@@ -13,9 +13,11 @@ import { LinkStateStrategy } from "./LinkStateStrategy";
 import { DistanceVectorStrategy } from "./DistanceVectorStrategy";
 
 export class SimulationController {
-  private currentStepIndex: number;
-  private history: SimulationState[];
-  private topology: Topology;
+  // made public so Svelte can bind directly (Timeline, Editor, etc.)
+  public currentStepIndex: number;
+  public history: SimulationState[];
+  public topology: Topology;
+
   private events: MinHeap<SimulationEvent>;
   private nodeEventMap: Map<string, SimulationEvent[]>;
   private linkEventMap: Map<string, SimulationEvent[]>;
@@ -33,6 +35,15 @@ export class SimulationController {
     this.pushState();
   }
 
+  // convenience getters for UI
+  public get running(): boolean {
+    return this.playing;
+  }
+
+  public get isPlaying(): boolean {
+    return this.playing;
+  }
+
   // ----------------------------- Basis / Timeline ----------------------------
 
   private pushState(): void {
@@ -45,7 +56,7 @@ export class SimulationController {
       step = 0;
     }
 
-    // Nur nach vorne simulieren, falls nötig
+    // only simulate forward if needed
     while (this.currentStepIndex < step) {
       this.nextStep();
       if (this.currentStepIndex === step) {
@@ -132,10 +143,10 @@ export class SimulationController {
         break;
       }
       case EventType.NODE_ADDITION:
-        // Nicht eindeutig spezifiziert -> keine Aktion.
+        // not clearly specified -> no-op for now
         break;
       case EventType.LINK_ADDITION:
-        // Nicht eindeutig spezifiziert -> keine Aktion.
+        // not clearly specified -> no-op for now
         break;
       default:
         break;
@@ -235,7 +246,7 @@ export class SimulationController {
   public nextStep(): void {
     this.currentStepIndex++;
 
-    // Events dieses Schrittes abarbeiten
+    // handle all events scheduled for this step
     while (true) {
       const peek = this.events.peek();
       if (!peek || peek.step > this.currentStepIndex) {
@@ -247,7 +258,7 @@ export class SimulationController {
       }
     }
 
-    // Routing-Strategie für alle Router ausführen
+    // execute routing strategy for all routers
     for (const node of this.topology.nodes.values()) {
       if (node instanceof Router && node.strategy) {
         node.strategy.executeStep(node, this.topology);
@@ -281,7 +292,7 @@ export class SimulationController {
     let targetRouter: Router | null = null;
     const path: string[] = [];
 
-    // Start
+    // start
     if (sourceNode instanceof Router) {
       startRouter = sourceNode;
       path.push(sourceNode.id);
@@ -294,7 +305,7 @@ export class SimulationController {
       return [];
     }
 
-    // Ziel
+    // target
     let appendTargetDevice = false;
     if (targetNode instanceof Router) {
       targetRouter = targetNode;
@@ -328,7 +339,7 @@ export class SimulationController {
 
       const nextHopId = entry.nextHopId;
       if (visited.has(nextHopId)) {
-        // Schleife
+        // loop
         return [];
       }
       visited.add(nextHopId);
@@ -340,7 +351,7 @@ export class SimulationController {
       currentId = nextHopId;
 
       if (path.length > this.topology.nodes.size + 2) {
-        // Sicherheitsbremse
+        // safety brake
         return [];
       }
     }
@@ -349,7 +360,7 @@ export class SimulationController {
       path.push(targetId);
     }
 
-    // Router im Pfad als "optimal" markieren
+    // mark routers on path as optimal
     for (const node of this.topology.nodes.values()) {
       if (node instanceof Router) {
         node.optimal = false;
@@ -491,3 +502,4 @@ export class SimulationController {
     return JSON.stringify({ nodes, links, events }, null, 2);
   }
 }
+
