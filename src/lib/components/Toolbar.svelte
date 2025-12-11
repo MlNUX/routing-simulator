@@ -1,27 +1,29 @@
 <script lang="ts">
   import { notify } from '$lib/notify';
   import { setAlgorithm } from '$lib/stores/simulation';
+  import { RoutingStrategieType } from '$lib/stores/RoutingStrategieType';
 
   type AlgorithmSelection = 'link' | 'distance' | 'distancePoisoned';
 
+  // purely UI state – backend is driven via setAlgorithm(...)
   let selected: AlgorithmSelection = 'link';
 
   async function selectLinkState() {
     selected = 'link';
-    // store wrapper maps this to AlgorithmType.LINK_STATE internally
-    setAlgorithm('LINK_STATE');
+    setAlgorithm(RoutingStrategieType.LINK_STATE);
     await notify('Link-State algorithm selected');
   }
 
   async function selectDistanceVector() {
     selected = 'distance';
-    setAlgorithm('DISTANCE_VECTOR');
+    setAlgorithm(RoutingStrategieType.DISTANCE_VECTOR);
     await notify('Distance-Vector algorithm selected');
   }
 
   async function selectDistanceVectorPoisoned() {
     selected = 'distancePoisoned';
-    setAlgorithm('DISTANCE_VECTOR_POISENED');
+    // NOTE: enum name matches your RoutingStrategieType
+    setAlgorithm(RoutingStrategieType.DISTANCE_VECTOR_POISONED);
     await notify('Distance-Vector (poisoned reverse) algorithm selected');
   }
 

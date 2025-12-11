@@ -4,4 +4,4 @@ export enum EventType {
   NODE_ADDITION = "NODE_ADDITION",
   LINK_ADDITION = "LINK_ADDITION",
   WEIGHT_CHANGE = "WEIGHT_CHANGE",
-}\n
+}

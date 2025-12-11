@@ -1,29 +1,28 @@
-// src/lib/simulationStore.ts
+// src/lib/stores/simulation.ts
 import { writable } from 'svelte/store';
 
-// Imports an dein Backend anpassen:
 import { SimulationController } from './SimulationController';
 import type { AlgorithmType } from './RoutingStrategieType';
 import type { SimulationEvent } from './SimulationEvent';
 import type { SimulationState } from './SimulationState';
 import { Topology } from './Topology';
 
-// Falls dein SimulationController ohne Parameter gebaut wird,
-// ändere die nächste Zeile zu: new SimulationController()
+// main simulation store: one SimulationController singleton
 export const simulation = writable(new SimulationController(new Topology()));
 
-/**
- * Jede Wrapper-Funktion nutzt das von dir gewünschte Pattern:
- *
- * simulation.update((controller) => {
- *   controller.someMethod();
- *   return controller;
- * });
- *
- * und gibt ggf. Rückgabewerte sauber nach außen weiter.
- */
+// ---------------------------------------------------------------------------
+// Router selection state (used by Editor.svelte & RouterTablePanel.svelte)
+// ---------------------------------------------------------------------------
 
-// --- Steuerung der Simulation ------------------------------------------------
+export const selectedRouterId = writable<string | null>(null);
+
+export function setSelectedRouter(id: string | null): void {
+  selectedRouterId.set(id);
+}
+
+// ---------------------------------------------------------------------------
+// Control of the simulation (playback etc.)
+// ---------------------------------------------------------------------------
 
 export function play(): void {
   simulation.update((controller) => {
@@ -39,6 +38,7 @@ export function pause(): void {
   });
 }
 
+// setAlgorithm uses your AlgorithmType from RoutingStrategieType.ts
 export function setAlgorithm(algo: AlgorithmType): void {
   simulation.update((controller) => {
     controller.setAlgorithm(algo);
@@ -46,6 +46,7 @@ export function setAlgorithm(algo: AlgorithmType): void {
   });
 }
 
+// Jump to specific step (Timeline)
 export function jumpToStep(step: number): SimulationState {
   let state!: SimulationState;
   simulation.update((controller) => {
@@ -55,6 +56,7 @@ export function jumpToStep(step: number): SimulationState {
   return state;
 }
 
+// Underlying "next step" from the backend
 export function nextStep(): void {
   simulation.update((controller) => {
     controller.nextStep();
@@ -62,7 +64,45 @@ export function nextStep(): void {
   });
 }
 
-// --- Topologie-Operationen ---------------------------------------------------
+// -----------------------------------------------
+// Wrappers expected by PlaybackControls.svelte
+// -----------------------------------------------
+
+// step forward → just call nextStep()
+export function stepForward(): void {
+  nextStep();
+}
+
+// very simple "step back": read currentStepIndex (via any) and jumpToStep(current - 1)
+export function stepBackward(): void {
+  simulation.update((controller) => {
+    const anyCtrl = controller as any;
+    const current: number = anyCtrl.currentStepIndex ?? 0;
+    const prev = Math.max(0, current - 1);
+    controller.jumpToStep(prev);
+    return controller;
+  });
+}
+
+// stop → go to step 0
+export function stop(): void {
+  simulation.update((controller) => {
+    controller.jumpToStep(0);
+    return controller;
+  });
+}
+
+// reset → recreate controller with same topology (very simple reset)
+export function reset(): void {
+  simulation.update((controller) => {
+    const topo = controller.getTopology();
+    return new SimulationController(topo);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Topology operations (Editor / future palette)
+// ---------------------------------------------------------------------------
 
 export function addNode(xPos: number, yPos: number): void {
   simulation.update((controller) => {
@@ -92,7 +132,9 @@ export function deleteLink(sourceId: string, targetId: string): void {
   });
 }
 
-// --- Events ------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Events
+// ---------------------------------------------------------------------------
 
 export function addEvent(event: SimulationEvent): void {
   simulation.update((controller) => {
@@ -101,10 +143,11 @@ export function addEvent(event: SimulationEvent): void {
   });
 }
 
-// --- Abfragen / Hilfsfunktionen ---------------------------------------------
+// ---------------------------------------------------------------------------
+// Queries / helpers
+// ---------------------------------------------------------------------------
 
 export function getTopology() {
-  // laut UML gibt es getTopology(): Topology
   let topology;
   simulation.update((controller) => {
     topology = controller.getTopology();
@@ -122,7 +165,9 @@ export function getPath(sourceId: string, targetId: string): string[] {
   return path;
 }
 
-// --- Import / Export ---------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Import / Export
+// ---------------------------------------------------------------------------
 
 export function importJson(json: string): void {
   simulation.update((controller) => {
@@ -139,3 +184,4 @@ export function exportJson(): string {
   });
   return result;
 }
+
