@@ -1,1 +1,352 @@
-@import 'tailwindcss';
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background: #e6f7ff;
+  color: #0f172a;
+}
+
+.app-root {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #e6f7ff;
+}
+
+.canvas-layout {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.editor-shell {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.top-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+}
+
+.toolbar {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toolbar-title {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.25em;
+}
+
+.toolbar-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.toolbar-right {
+  width: 140px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-pill {
+  border-radius: 999px;
+  padding: 8px 24px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid #38bdf8;
+  background: #ffffff;
+  color: #0369a1;
+  cursor: pointer;
+}
+
+.btn-pill--primary {
+  background: #0ea5e9;
+  color: #ffffff;
+  border-color: #0ea5e9;
+}
+
+.btn-pill--ghost {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: #0ea5e9;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.btn-icon:hover,
+.btn-pill:hover {
+  filter: brightness(1.05);
+}
+
+.btn-small-primary {
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  background: #0ea5e9;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.right-panel {
+  position: absolute;
+  top: 80px;
+  right: 24px;
+  bottom: 120px;
+  width: 220px;
+  z-index: 10;
+
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(223, 243, 255, 0.96);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.15);
+}
+
+.palette-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #0369a1;
+  margin-bottom: 8px;
+}
+
+.palette-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: #38bdf8;
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.15);
+}
+
+.palette-icon {
+  background: #0ea5e9;
+  border-radius: 999px;
+}
+
+.palette-icon--router {
+  width: 32px;
+  height: 32px;
+}
+
+.palette-icon--switch {
+  width: 32px;
+  height: 6px;
+}
+
+.palette-icon--end {
+  width: 32px;
+  height: 18px;
+}
+
+.palette-icon--edge {
+  width: 32px;
+  height: 2px;
+  background: #0f172a;
+}
+
+.palette-label {
+  font-weight: 600;
+}
+
+.right-panel-footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.zoom-row {
+  display: flex;
+  gap: 6px;
+}
+
+.zoom-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: none;
+  background: #0ea5e9;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.trash-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: #0ea5e9;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.bottom-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 10;
+
+  width: min(900px, 90vw);
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: rgba(223, 243, 255, 0.96);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.15);
+}
+
+.current-state-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #0ea5e9;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.timeline {
+  position: relative;
+  height: 24px;
+  margin-bottom: 6px;
+}
+
+.timeline-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: #38bdf8;
+}
+
+.timeline-ticks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  justify-content: space-between;
+}
+
+.timeline-tick {
+  width: 1px;
+  height: 10px;
+  background: #0ea5e9;
+}
+
+.timeline-knob {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #0ea5e9;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 4px rgba(15, 23, 42, 0.4);
+}
+
+.controls-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.control-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: #0ea5e9;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.control-btn:hover {
+  filter: brightness(1.05);
+}
+
+.svelte-flow,
+.svelte-flow__pane {
+  background-color: #dff3ff !important;
+}
+
+
+.svelte-flow {
+  --xy-edge-stroke-default: #0ea5e9;
+  --xy-edge-stroke-selected-default: #22c55e;
+  --xy-edge-stroke-width-default: 2;
+}
+
+.svelte-flow__edges path,
+.svelte-flow__edge-path {
+  stroke: #0ea5e9 !important;
+  stroke-width: 3px !important;
+  fill: none !important;
+}
+
+.svelte-flow__edge-label {
+  fill: #f9fafb;
+  font-size: 12px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: rgba(15, 23, 42, 0.7);
+  stroke-width: 3px;
+}
+

@@ -1,2 +1,41 @@
-<h1>Welcome to SvelteKit</h1>
-<p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
+<script lang="ts">
+  import Toolbar from '$lib/components/Toolbar.svelte';
+  import Editor from '$lib/components/Editor.svelte';
+  import RouterPanel from '$lib/components/RouterPanel.svelte';
+  import Timeline from '$lib/components/Timeline.svelte';
+  import PlaybackControls from '$lib/components/PlaybackControls.svelte';
+  import RouterTablePanel from '$lib/components/RouterTablePanel.svelte';
+
+  import { simulation } from '$lib/stores/simulation';
+
+  $: engine = $simulation.engine;
+</script>
+
+<div class="canvas-layout">
+  <!-- main editor canvas -->
+  <div class="editor-shell">
+    <Editor />
+  </div>
+
+  <!-- top toolbar -->
+  <div class="top-bar">
+    <Toolbar />
+  </div>
+
+  <!-- right palette bar -->
+  <RouterPanel />
+
+  <!-- routing-table overlay (no test-packet overlay anymore) -->
+  <RouterTablePanel />
+
+  <!-- bottom bar: current state + timeline + playback controls -->
+  <div class="bottom-bar">
+    <div class="current-state-pill">
+      Current state: {engine.currentStep}
+    </div>
+
+    <Timeline />
+    <PlaybackControls />
+  </div>
+</div>
+
