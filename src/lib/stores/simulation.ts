@@ -1,4 +1,3 @@
-// src/lib/stores/simulation.ts
 import { writable } from 'svelte/store';
 
 import { SimulationController } from './SimulationController';
@@ -6,9 +5,61 @@ import type { AlgorithmType } from './RoutingStrategieType';
 import type { SimulationEvent } from './SimulationEvent';
 import type { SimulationState } from './SimulationState';
 import { Topology } from './Topology';
+import type { Node } from './Node';
+import { Router } from './Router';
+import { Link } from './Link';
+import { RoutingTable } from './RoutingTable';
 
-// main simulation store: one SimulationController singleton
-export const simulation = writable(new SimulationController(new Topology()));
+// ---------------------------------------------------------------------------
+// Sample topology for testing (3 routers in a line: R1 - R2 - R3)
+// with example routing tables
+// ---------------------------------------------------------------------------
+
+function createSampleTopology(): Topology {
+  const nodes = new Map<string, Node>();
+
+  // R1 routing table
+  const r1Table = new RoutingTable();
+  // R1 → R2 direct
+  r1Table.addEntry('R2', 'R2', 1);
+  // R1 → R3 via R2
+  r1Table.addEntry('R3', 'R2', 2);
+
+  // R2 routing table
+  const r2Table = new RoutingTable();
+  // R2 → R1 direct
+  r2Table.addEntry('R1', 'R1', 1);
+  // R2 → R3 direct
+  r2Table.addEntry('R3', 'R3', 1);
+
+  // R3 routing table
+  const r3Table = new RoutingTable();
+  // R3 → R2 direct
+  r3Table.addEntry('R2', 'R2', 1);
+  // R3 → R1 via R2
+  r3Table.addEntry('R1', 'R2', 2);
+
+  const r1 = new Router('R1', 'R1', 100, 200, r1Table);
+  const r2 = new Router('R2', 'R2', 300, 200, r2Table);
+  const r3 = new Router('R3', 'R3', 500, 200, r3Table);
+
+  nodes.set(r1.id, r1);
+  nodes.set(r2.id, r2);
+  nodes.set(r3.id, r3);
+
+  const links: Link[] = [
+    new Link('L1', r1, r2, 1),
+    new Link('L2', r2, r3, 1)
+  ];
+
+  return new Topology(nodes, links);
+}
+
+// ---------------------------------------------------------------------------
+// Main simulation store: single SimulationController instance
+// ---------------------------------------------------------------------------
+
+export const simulation = writable(new SimulationController(createSampleTopology()));
 
 // ---------------------------------------------------------------------------
 // Router selection state (used by Editor.svelte & RouterTablePanel.svelte)
@@ -64,16 +115,16 @@ export function nextStep(): void {
   });
 }
 
-// -----------------------------------------------
+// ---------------------------------------------------------------------------
 // Wrappers expected by PlaybackControls.svelte
-// -----------------------------------------------
+// ---------------------------------------------------------------------------
 
 // step forward → just call nextStep()
 export function stepForward(): void {
   nextStep();
 }
 
-// very simple "step back": read currentStepIndex (via any) and jumpToStep(current - 1)
+// "step back": read currentStepIndex (via any) and jumpToStep(current - 1)
 export function stepBackward(): void {
   simulation.update((controller) => {
     const anyCtrl = controller as any;
@@ -92,7 +143,7 @@ export function stop(): void {
   });
 }
 
-// reset → recreate controller with same topology (very simple reset)
+// reset → recreate controller with same topology (simple reset)
 export function reset(): void {
   simulation.update((controller) => {
     const topo = controller.getTopology();
@@ -147,8 +198,8 @@ export function addEvent(event: SimulationEvent): void {
 // Queries / helpers
 // ---------------------------------------------------------------------------
 
-export function getTopology() {
-  let topology;
+export function getTopology(): Topology {
+  let topology!: Topology;
   simulation.update((controller) => {
     topology = controller.getTopology();
     return controller;
@@ -157,7 +208,7 @@ export function getTopology() {
 }
 
 export function getPath(sourceId: string, targetId: string): string[] {
-  let path!: string[];
+  let path: string[] = [];
   simulation.update((controller) => {
     path = controller.getPath(sourceId, targetId);
     return controller;
@@ -177,7 +228,7 @@ export function importJson(json: string): void {
 }
 
 export function exportJson(): string {
-  let result!: string;
+  let result = '';
   simulation.update((controller) => {
     result = controller.exportJson();
     return controller;

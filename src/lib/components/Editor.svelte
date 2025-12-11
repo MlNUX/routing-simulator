@@ -1,7 +1,7 @@
 <script lang="ts">
   import { SvelteFlow, Background, type NodeTypes } from '@xyflow/svelte';
   import RouterNode from '$lib/components/RouterNode.svelte';
-  import { simulation, setSelectedRouter } from '$lib/stores/simulation';
+  import { simulation, setSelectedRouter, addNode } from '$lib/stores/simulation';
 
   const proOptions = { hideAttribution: true };
 
@@ -9,6 +9,7 @@
     router: RouterNode
   };
 
+  // Get topology from SimulationController in the store
   $: controller = $simulation as any;
   $: sim = controller.simulation ?? controller;
   $: topology = sim.topology;
@@ -51,15 +52,59 @@
 
   $: nodes = mapTopologyNodesToFlowNodes(topology);
   $: edges = mapTopologyLinksToFlowEdges(topology);
+
+  function handleDrop(event: DragEvent) {
+    event.preventDefault();
+
+    const data = event.dataTransfer?.getData('application/x-routing-node');
+    if (!data) return;
+
+    let payload: { kind: string } | null = null;
+    try {
+      payload = JSON.parse(data);
+    } catch {
+      return;
+    }
+
+    if (!payload || payload.kind !== 'router') {
+      return;
+    }
+
+    // Map screen coords to editor coords (simple: use wrapper bounds)
+    const bounds = (event.currentTarget as HTMLDivElement).getBoundingClientRect();
+    const x = event.clientX - bounds.left;
+    const y = event.clientY - bounds.top;
+
+    // This calls SimulationController.addNode(x, y) via the store wrapper
+    addNode(x, y);
+  }
+
+  function handleDragOver(event: DragEvent) {
+    // Required so that drop is allowed
+    event.preventDefault();
+  }
 </script>
 
-<SvelteFlow
-  {nodes}
-  {edges}
-  {nodeTypes}
-  {proOptions}
-  fitView
+<div
+  class="editor-flow-wrapper"
+  on:dragover={handleDragOver}
+  on:drop={handleDrop}
 >
-  <Background />
-</SvelteFlow>
+  <SvelteFlow
+    {nodes}
+    {edges}
+    {nodeTypes}
+    {proOptions}
+    fitView
+  >
+    <Background />
+  </SvelteFlow>
+</div>
+
+<style>
+  .editor-flow-wrapper {
+    position: absolute;
+    inset: 0;
+  }
+</style>
 
