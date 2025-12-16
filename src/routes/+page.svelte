@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { SvelteFlowProvider } from '@xyflow/svelte';
+
   import Toolbar from '$lib/components/Toolbar.svelte';
   import Editor from '$lib/components/Editor.svelte';
   import RouterPanel from '$lib/components/RouterPanel.svelte';
@@ -13,32 +15,34 @@
   $: currentStep = controller.currentStepIndex ?? 0;
 </script>
 
-<div class="canvas-layout">
-  <!-- main editor canvas -->
-  <div class="editor-shell">
-    <Editor />
-  </div>
-
-  <!-- top toolbar -->
-  <div class="top-bar">
-    <Toolbar />
-  </div>
-
-  <!-- left palette bar -->
-  <RouterPanel />
-
-  <!-- right routing-table panel & packets overlay -->
-  <RouterTablePanel />
-  <Packets />
-
-  <!-- bottom bar: current state + timeline + playback controls -->
-  <div class="bottom-bar">
-    <div class="current-state-pill">
-      Current state: {currentStep}
+<SvelteFlowProvider>
+  <div class="canvas-layout">
+    <!-- main editor canvas -->
+    <div class="editor-shell">
+      <Editor />
     </div>
 
-    <Timeline />
-    <PlaybackControls />
+    <!-- top toolbar -->
+    <div class="top-bar">
+      <Toolbar />
+    </div>
+
+    <!-- left palette bar -->
+    <RouterPanel />
+
+    <!-- right routing-table panel & packets overlay -->
+    <RouterTablePanel />
+    <Packets />
+
+    <!-- bottom bar: current state + timeline + playback controls -->
+    <div class="bottom-bar">
+      <div class="current-state-pill">
+        Current state: {currentStep}
+      </div>
+
+      <Timeline />
+      <PlaybackControls />
+    </div>
   </div>
-</div>
+</SvelteFlowProvider>
 

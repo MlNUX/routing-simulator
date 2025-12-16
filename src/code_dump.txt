@@ -1,0 +1,2328 @@
+
+===== FILE: ./lib/components/Editor.svelte =====
+
+<script lang="ts">
+  import { SvelteFlow, Background, type NodeTypes } from '@xyflow/svelte';
+  import RouterNode from '$lib/components/RouterNode.svelte';
+  import {
+    simulation,
+    setSelectedRouter,
+    addNode,
+    placementMode,
+    clearPlacementMode
+  } from '$lib/stores/simulation';
+
+  const proOptions = { hideAttribution: true };
+
+  const nodeTypes: NodeTypes = {
+    router: RouterNode
+  };
+
+  // SimulationController instance from store
+  $: controller = $simulation as any;
+
+  // Prefer getter if present
+  $: topology =
+    typeof controller.getTopology === 'function'
+      ? controller.getTopology()
+      : controller.topology;
+
+  function mapTopologyNodesToFlowNodes(topology: any) {
+    if (!topology || !topology.nodes) return [];
+
+    const rawNodes = topology.nodes;
+    const nodesArray = Array.isArray(rawNodes)
+      ? rawNodes
+      : rawNodes instanceof Map
+        ? Array.from(rawNodes.values())
+        : [];
+
+    return nodesArray.map((node: any) => ({
+      id: node.id,
+      type: 'router',
+      position: {
+        x: node.xPos ?? 0,
+        y: node.yPos ?? 0
+      },
+      data: {
+        label: node.name ?? node.id,
+        onSelect: (id: string) => setSelectedRouter(id)
+      }
+    }));
+  }
+
+  function mapTopologyLinksToFlowEdges(topology: any) {
+    if (!topology || !topology.links) return [];
+
+    return topology.links.map((link: any) => ({
+      id: link.id,
+      source: link.source?.id,
+      target: link.target?.id,
+      label: String(link.weight ?? '')
+    }));
+  }
+
+  $: nodes = mapTopologyNodesToFlowNodes(topology);
+  $: edges = mapTopologyLinksToFlowEdges(topology);
+
+  // ---------------------------------------------------------------------------
+  // Router placement: click-and-drag to see a preview, release to place router
+  // ---------------------------------------------------------------------------
+
+  $: mode = $placementMode;
+
+  let isPlacing = false;
+  let previewX = 0;
+  let previewY = 0;
+
+  function updatePreview(event: PointerEvent) {
+    const wrapper = event.currentTarget as HTMLDivElement;
+    const rect = wrapper.getBoundingClientRect();
+    previewX = event.clientX - rect.left;
+    previewY = event.clientY - rect.top;
+  }
+
+  function handlePointerDown(event: PointerEvent) {
+    if (mode !== 'router') return;
+
+    const target = event.target as HTMLElement;
+
+    // only start placement when clicking on the empty pane (not on a node)
+    if (!target.classList.contains('svelte-flow__pane')) return;
+
+    isPlacing = true;
+    updatePreview(event);
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  }
+
+  function handlePointerMove(event: PointerEvent) {
+    if (!isPlacing) return;
+    updatePreview(event);
+  }
+
+  function handlePointerUp(event: PointerEvent) {
+    if (!isPlacing) return;
+
+    const wrapper = event.currentTarget as HTMLDivElement;
+    const rect = wrapper.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    addNode(x, y);
+
+    isPlacing = false;
+    clearPlacementMode();
+
+    try {
+      wrapper.releasePointerCapture(event.pointerId);
+    } catch {
+      // ignore
+    }
+  }
+</script>
+
+<div
+  class="editor-drop-wrapper"
+  on:pointerdown={handlePointerDown}
+  on:pointermove={handlePointerMove}
+  on:pointerup={handlePointerUp}
+>
+  <SvelteFlow
+    {nodes}
+    {edges}
+    {nodeTypes}
+    {proOptions}
+    fitView
+  >
+    <Background />
+  </SvelteFlow>
+
+  {#if isPlacing && mode === 'router'}
+    <!-- visual preview of the router under the cursor -->
+    <div
+      class="router-preview"
+      style={`left: ${previewX}px; top: ${previewY}px;`}
+    >
+      Router
+    </div>
+  {/if}
+</div>
+
+
+
+===== FILE: ./lib/components/PacketOverlay.svelte =====
+
+<script lang="ts">
+  import { simulation } from '$lib/stores/simulation';
+
+  $: controller = $simulation as any;
+  $: sim = controller.simulation ?? controller;
+  $: testPacket = sim.testPacket ?? null;
+</script>
+
+{#if testPacket}
+  <div class="packet-overlay">
+    <div class="packet-title">Test Packet</div>
+    <div>Hop {testPacket.currentHopIndex + 1} / {testPacket.path.length}</div>
+    <div class="packet-path">
+      {testPacket.path.join(' → ')}
+    </div>
+  </div>
+{/if}
+
+<style>
+  .packet-overlay {
+    position: absolute;
+    top: 88px;
+    left: 24px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.9);
+    color: #e5e7eb;
+    font-size: 11px;
+    box-shadow: 0 4px 8px rgba(15, 23, 42, 0.25);
+    z-index: 10;
+  }
+
+  .packet-title {
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .packet-path {
+    margin-top: 2px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      'Liberation Mono', 'Courier New', monospace;
+  }
+</style>
+
+
+
+===== FILE: ./lib/components/Packets.svelte =====
+
+<script lang="ts">
+  import { simulation } from '$lib/stores/simulation';
+
+  $: controller = $simulation as any;
+  $: sim = controller.simulation ?? controller;
+
+  // you can expose these however you like on SimulationController
+  $: routingPackets = sim.routingPackets ?? [];
+  $: testPackets =
+    sim.testPackets ??
+    (sim.testPacket ? [sim.testPacket] : []);
+</script>
+
+{#if routingPackets.length > 0 || testPackets.length > 0}
+  <div class="packets-panel">
+    {#if routingPackets.length > 0}
+      <div class="packets-section">
+        <h3>Routing packets</h3>
+        <ul>
+          {#each routingPackets as p}
+            <li>
+              <span class="packet-kind">R</span>
+              <span class="packet-path">{p.sourceId} → {p.targetId}</span>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+
+    {#if testPackets.length > 0}
+      <div class="packets-section">
+        <h3>Test packets</h3>
+        <ul>
+          {#each testPackets as p}
+            <li>
+              <span class="packet-kind packet-kind--test">T</span>
+              <span class="packet-path">{p.sourceId} → {p.targetId}</span>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+  </div>
+{/if}
+
+<style>
+  .packets-panel {
+    position: absolute;
+    left: 24px;
+    top: 88px;
+    max-width: 260px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.9);
+    color: #e5e7eb;
+    font-size: 11px;
+    box-shadow: 0 4px 8px rgba(15, 23, 42, 0.25);
+    z-index: 10;
+  }
+
+  .packets-section + .packets-section {
+    margin-top: 8px;
+  }
+
+  .packets-section h3 {
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .packets-section ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .packets-section li {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 0;
+  }
+
+  .packet-kind {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 700;
+    background: #38bdf8;
+    color: #0f172a;
+  }
+
+  .packet-kind--test {
+    background: #22c55e;
+  }
+
+  .packet-path {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      'Liberation Mono', 'Courier New', monospace;
+  }
+</style>
+
+
+
+===== FILE: ./lib/components/PlaybackControls.svelte =====
+
+<script lang="ts">
+  import {
+    simulation,
+    play,
+    pause,
+    stepForward,
+    stepBackward,
+    stop,
+    reset
+  } from '$lib/stores/simulation';
+
+  // SimulationController instance
+  $: controller = $simulation as any;
+
+  // try to determine playing state from either controller or inner simulation
+  $: isPlaying =
+    !!controller.running ||
+    !!controller.simulation?.running ||
+    false;
+
+  function handlePlay() {
+    play();
+  }
+
+  function handlePause() {
+    pause();
+  }
+
+  function handleStop() {
+    stop();
+  }
+
+  function handleReset() {
+    reset();
+  }
+</script>
+
+<div class="controls-row">
+  <!-- stop -->
+  <button
+    class="control-btn"
+    title="Stop (go to start)"
+    on:click={handleStop}
+  >
+    ⏹
+  </button>
+
+  <!-- step backward -->
+  <button
+    class="control-btn"
+    title="Step back"
+    on:click={stepBackward}
+  >
+    ⏮
+  </button>
+
+  <!-- play -->
+  <button
+    class="control-btn"
+    title="Play"
+    on:click={handlePlay}
+    disabled={isPlaying}
+  >
+    ▶
+  </button>
+
+  <!-- pause -->
+  <button
+    class="control-btn"
+    title="Pause"
+    on:click={handlePause}
+    disabled={!isPlaying}
+  >
+    ⏸
+  </button>
+
+  <!-- step forward -->
+  <button
+    class="control-btn"
+    title="Step forward"
+    on:click={stepForward}
+  >
+    ⏭
+  </button>
+
+  <!-- reset -->
+  <button
+    class="control-btn"
+    title="Reset simulation"
+    on:click={handleReset}
+  >
+    ↻
+  </button>
+</div>
+
+
+
+===== FILE: ./lib/components/RouterNode.svelte =====
+
+<script lang="ts">
+  import { Handle, Position } from '@xyflow/svelte';
+
+  export let id: string;
+  export let data: {
+    label: string;
+    onSelect?: (id: string) => void;
+  };
+  export let selected: boolean;
+
+  function handleClick() {
+    if (data?.onSelect) {
+      data.onSelect(id);
+    }
+  }
+</script>
+
+<div
+  class={`router-node ${selected ? 'router-node--selected' : ''}`}
+  on:click={handleClick}
+>
+  <!-- small red status circle -->
+  <div class="router-node__status-dot" />
+
+  <span class="router-node__label">{data.label}</span>
+
+  <Handle type="target" position={Position.Left} />
+  <Handle type="source" position={Position.Right} />
+</div>
+
+<style>
+  .router-node {
+    position: relative;
+    width: 140px;
+    height: 60px;
+    border-radius: 18px;
+    background: #0284c7;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.25);
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+
+  .router-node--selected {
+    background: #0b3b63;
+    border-color: #0b3b63;
+    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.35);
+  }
+
+  .router-node__label {
+    pointer-events: none;
+  }
+
+  .router-node__status-dot {
+    position: absolute;
+    left: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: #ef4444;
+    border: 2px solid #f9fafb;
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.7);
+  }
+</style>
+
+
+
+===== FILE: ./lib/components/RouterPanel.svelte =====
+
+<script lang="ts">
+  import { notify } from '$lib/notify';
+  import { placementMode, toggleRouterPlacement } from '$lib/stores/simulation';
+
+  $: currentMode = $placementMode;
+
+  async function handleClearNetwork() {
+    console.log('Clear network (dummy)');
+    await notify('Clear network (dummy)');
+  }
+
+  async function handleSendPacket() {
+    console.log('Send packet (dummy)');
+    await notify('Send packet (dummy)');
+  }
+
+  function handleZoomIn() {
+    console.log('Zoom in (dummy)');
+  }
+
+  function handleZoomOut() {
+    console.log('Zoom out (dummy)');
+  }
+
+  function handleDeleteSelection() {
+    console.log('Delete selection (dummy)');
+  }
+
+  function handleRouterClick() {
+    toggleRouterPlacement();
+  }
+</script>
+
+<aside class="left-panel">
+  <button class="btn-small-primary" on:click={handleClearNetwork}>
+    Clear network
+  </button>
+
+  <button
+    class="btn-small-primary"
+    style="margin-top: 8px;"
+    on:click={handleSendPacket}
+  >
+    Send packet
+  </button>
+
+  <div style="margin-top: 16px;">
+    <div class="palette-title">Router placement tool</div>
+
+    <div class="palette-list">
+      <div
+        class={`palette-item ${
+          currentMode === 'router' ? 'palette-item--active' : ''
+        }`}
+        on:click={handleRouterClick}
+      >
+        <div class="palette-icon palette-icon--router"></div>
+        <div class="palette-label">
+          {currentMode === 'router' ? 'Placing routers…' : 'Router'}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="left-panel-footer">
+    <div class="zoom-row">
+      <button class="zoom-btn" title="Zoom out" on:click={handleZoomOut}>
+        🔍-
+      </button>
+      <button class="zoom-btn" title="Zoom in" on:click={handleZoomIn}>
+        🔍+
+      </button>
+    </div>
+    <button class="trash-btn" title="Delete" on:click={handleDeleteSelection}>
+      🗑
+    </button>
+  </div>
+</aside>
+
+
+
+===== FILE: ./lib/components/RouterTablePanel.svelte =====
+
+<script lang="ts">
+  import { simulation, selectedRouterId } from '$lib/stores/simulation';
+
+  type RoutingEntryView = {
+    destination: string;
+    cost: number;
+    nextHop: string;
+  };
+
+  $: controller = $simulation as any;
+
+  $: topology =
+    typeof controller.getTopology === 'function'
+      ? controller.getTopology()
+      : controller.topology;
+
+  $: selectedId = $selectedRouterId;
+
+  function getRouterById(topology: any, id: string | null) {
+    if (!topology || !id) return null;
+
+    const rawNodes = topology.nodes;
+    const nodesArray = Array.isArray(rawNodes)
+      ? rawNodes
+      : rawNodes instanceof Map
+        ? Array.from(rawNodes.values())
+        : [];
+
+    return nodesArray.find((n: any) => n.id === id) ?? null;
+  }
+
+  function extractRoutingEntries(router: any): RoutingEntryView[] {
+    if (!router?.routingTable?.entries) return [];
+
+    const entries = router.routingTable.entries;
+
+    const rawEntries: any[] =
+      entries instanceof Map ? Array.from(entries.values()) : Object.values(entries);
+
+    return rawEntries.map((e: any): RoutingEntryView => ({
+      destination: e.destinationId ?? e.destination ?? '',
+      cost: e.cost ?? 0,
+      nextHop: e.nextHopId ?? e.nextHop ?? ''
+    }));
+  }
+
+  $: selectedRouter = getRouterById(topology, selectedId);
+  $: routingEntries = selectedRouter ? extractRoutingEntries(selectedRouter) : [];
+</script>
+
+<div class="router-table-panel">
+  {#if selectedId}
+    <h3>Routing table: {selectedId}</h3>
+    {#if routingEntries.length === 0}
+      <p>No entries.</p>
+    {:else}
+      <table>
+        <thead>
+          <tr>
+            <th>Destination</th>
+            <th>Cost</th>
+            <th>Next hop</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each routingEntries as entry}
+            <tr>
+              <td>{entry.destination}</td>
+              <td>{entry.cost}</td>
+              <td>{entry.nextHop}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {/if}
+  {:else}
+    <p>Select a router to see its routing table.</p>
+  {/if}
+</div>
+
+<style>
+  .router-table-panel {
+    position: absolute;
+    top: 80px;
+    right: 24px;
+    bottom: 120px; /* leave space for bottom bar */
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(223, 243, 255, 0.96);
+    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.15);
+    font-size: 11px;
+    min-width: 260px;
+    overflow: auto;
+    z-index: 10;
+  }
+
+  .router-table-panel h3 {
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  .router-table-panel table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  .router-table-panel th,
+  .router-table-panel td {
+    padding: 2px 4px;
+    text-align: left;
+  }
+
+  .router-table-panel thead {
+    border-bottom: 1px solid #bae6fd;
+  }
+
+  .router-table-panel tbody tr:nth-child(even) {
+    background: #e0f2fe;
+  }
+</style>
+
+
+
+===== FILE: ./lib/components/Timeline.svelte =====
+
+<script lang="ts">
+  import { simulation, jumpToStep } from '$lib/stores/simulation';
+
+  $: controller = $simulation as any;
+  $: sim = controller.simulation ?? controller;
+
+  $: steps = sim.history ? sim.history.length : 1;
+  $: currentStep = sim.currentStepIndex ?? 0;
+
+  $: knobLeft = steps > 1 ? (currentStep / (steps - 1)) * 100 : 0;
+
+  function handleClick(event: MouseEvent) {
+    if (steps <= 1) return;
+
+    const rect = (event.currentTarget as HTMLDivElement).getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const ratio = Math.min(Math.max(x / rect.width, 0), 1);
+    const step = Math.round(ratio * (steps - 1));
+
+    jumpToStep(step);
+  }
+</script>
+
+<div class="timeline" on:click={handleClick}>
+  <div class="timeline-line"></div>
+  <div class="timeline-ticks">
+    {#each Array(steps) as _, i}
+      <div class="timeline-tick"></div>
+    {/each}
+  </div>
+
+  <div
+    class="timeline-knob"
+    style={`left: ${knobLeft}%;`}
+  ></div>
+</div>
+
+
+
+===== FILE: ./lib/components/Toolbar.svelte =====
+
+<script lang="ts">
+  import { notify } from '$lib/notify';
+  import { setAlgorithm } from '$lib/stores/simulation';
+  import { RoutingStrategieType } from '$lib/stores/RoutingStrategieType';
+
+  type AlgorithmSelection = 'link' | 'distance' | 'distancePoisoned';
+
+  // purely UI state – backend is driven via setAlgorithm(...)
+  let selected: AlgorithmSelection = 'link';
+
+  async function selectLinkState() {
+    selected = 'link';
+    setAlgorithm(RoutingStrategieType.LINK_STATE);
+    await notify('Link-State algorithm selected');
+  }
+
+  async function selectDistanceVector() {
+    selected = 'distance';
+    setAlgorithm(RoutingStrategieType.DISTANCE_VECTOR);
+    await notify('Distance-Vector algorithm selected');
+  }
+
+  async function selectDistanceVectorPoisoned() {
+    selected = 'distancePoisoned';
+    // NOTE: enum name matches your RoutingStrategieType
+    setAlgorithm(RoutingStrategieType.DISTANCE_VECTOR_POISONED);
+    await notify('Distance-Vector (poisoned reverse) algorithm selected');
+  }
+
+  async function handleChoosePreset() {
+    console.log('CHOOSE PRESET (dummy)');
+    await notify('Preset selector not implemented (dummy)');
+  }
+
+  async function handleEdit() {
+    console.log('Edit (dummy)');
+    await notify('Edit mode not implemented (dummy)');
+  }
+
+  async function handleSave() {
+    console.log('Save (dummy)');
+    await notify('Saving topology (dummy)');
+  }
+
+  async function handleImport() {
+    console.log('Import (dummy)');
+    await notify('Import not implemented (dummy)');
+  }
+</script>
+
+<div class="toolbar">
+  <div class="toolbar-title">ROUTING SIMULATOR</div>
+
+  <div class="toolbar-center">
+    <button
+      class={`btn-pill ${
+        selected === 'link' ? 'btn-pill--primary' : 'btn-pill--ghost'
+      }`}
+      on:click={selectLinkState}
+    >
+      LINK STATE
+    </button>
+
+    <button
+      class={`btn-pill ${
+        selected === 'distance' ? 'btn-pill--primary' : 'btn-pill--ghost'
+      }`}
+      on:click={selectDistanceVector}
+    >
+      DISTANCE VECTOR
+    </button>
+
+    <button
+      class={`btn-pill ${
+        selected === 'distancePoisoned' ? 'btn-pill--primary' : 'btn-pill--ghost'
+      }`}
+      on:click={selectDistanceVectorPoisoned}
+    >
+      DISTANCE VECTOR (PR)
+    </button>
+
+    <button
+      class="btn-pill btn-pill--primary"
+      on:click={handleChoosePreset}
+    >
+      CHOOSE PRESET
+    </button>
+  </div>
+
+  <div class="toolbar-right">
+    <button class="btn-icon" title="Edit" on:click={handleEdit}>✏️</button>
+    <button class="btn-icon" title="Save" on:click={handleSave}>💾</button>
+    <button class="btn-icon" title="Import" on:click={handleImport}>⬆️</button>
+  </div>
+</div>
+
+
+
+===== FILE: ./lib/notify.ts =====
+
+// src/lib/notify.ts
+export async function notify(message: string) {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    console.warn('Notifications not supported in this environment');
+    return;
+  }
+
+  let permission = Notification.permission;
+
+  if (permission === 'default') {
+    permission = await Notification.requestPermission();
+  }
+
+  if (permission === 'granted') {
+    new Notification(message);
+  } else {
+    console.log('Notification:', message);
+  }
+}
+
+
+
+===== FILE: ./lib/stores/DistanceVectorStrategy.ts =====
+
+import { RoutingEntry } from "./RoutingEntry";
+import { Router } from "./Router";
+import type { Topology } from "./Topology";
+import type { RoutingStrategy } from "./RoutingStrategy";
+
+export class DistanceVectorStrategy implements RoutingStrategy {
+  public poisoned: boolean;
+
+  constructor(poisoned: boolean) {
+    this.poisoned = poisoned;
+  }
+
+  public executeStep(router: Router, _topology: Topology): void {
+    const INF = Number.POSITIVE_INFINITY;
+    const entries = router.routingTable.entries;
+    const selfId = router.id;
+
+    // Basis: Eintrag für sich selbst (Kosten 0)
+    let selfEntry = entries.get(selfId);
+    if (!selfEntry) {
+      selfEntry = new RoutingEntry(selfId, selfId, 0);
+      entries.set(selfId, selfEntry);
+    } else {
+      selfEntry.cost = 0;
+      selfEntry.nextHopId = selfId;
+    }
+
+    // 1. Direktverbindungen: Einträge zu direkten Nachbarn (Router + Endgeräte)
+    for (const link of router.neighbors) {
+      const neighbor =
+        link.source === router ? link.target : link.source;
+      const neighborId = neighbor.id;
+      const directCost = link.weight;
+
+      const existing = entries.get(neighborId);
+      if (!existing || directCost < existing.cost) {
+        entries.set(
+          neighborId,
+          new RoutingEntry(neighborId, neighborId, directCost)
+        );
+      }
+    }
+
+    // 2. Distance-Vector-Update: Tabellen von Router-Nachbarn einbeziehen
+    let updated = false;
+
+    for (const link of router.neighbors) {
+      const neighborNode =
+        link.source === router ? link.target : link.source;
+
+      // Nur Router sind DV-Nachbarn, Endgeräte nicht
+      if (!(neighborNode instanceof Router)) {
+        continue;
+      }
+
+      const neighborRouter = neighborNode as Router;
+      const neighborEntries = neighborRouter.routingTable.entries;
+      const linkCost = link.weight;
+
+      for (const [destId, neighborEntry] of neighborEntries) {
+        // Das Ziel sind wir selbst? -> ignorieren
+        if (destId === selfId) {
+          continue;
+        }
+
+        // Poisoned Reverse: Nachbar sagt "über mich zu dir"
+        if (this.poisoned && neighborEntry.nextHopId === selfId) {
+          continue;
+        }
+
+        const viaCost = linkCost + (neighborEntry.cost ?? INF);
+        const current = entries.get(destId);
+
+        if (!current) {
+          entries.set(
+            destId,
+            new RoutingEntry(destId, neighborRouter.id, viaCost)
+          );
+          updated = true;
+        } else if (viaCost < current.cost) {
+          current.cost = viaCost;
+          current.nextHopId = neighborRouter.id;
+          updated = true;
+        }
+      }
+    }
+
+    // Das Flag `updated` könnte später im SimulationController genutzt werden,
+    // um Konvergenz zu erkennen. Hier wird es nur "verbraucht", um TS ruhigzustellen.
+    void updated;
+  }
+}
+
+
+===== FILE: ./lib/stores/EndDevice.ts =====
+
+import { Node } from "./Node";
+import type { Packet } from "./Packet";
+
+export class EndDevice extends Node {
+  constructor(id: string, name: string, xPos: number, yPos: number) {
+    super(id, name, xPos, yPos);
+  }
+
+  public receivePacket(_p: Packet): void {
+    // unknown behaviour -> left empty on purpose
+  }
+
+  public sendPacket(_p: Packet, _target: string): void {
+    // unknown behaviour -> left empty on purpose
+  }
+}
+
+
+===== FILE: ./lib/stores/EventType.ts =====
+
+export enum EventType {
+  NODE_FAILURE = "NODE_FAILURE",
+  LINK_FAILURE = "LINK_FAILURE",
+  NODE_ADDITION = "NODE_ADDITION",
+  LINK_ADDITION = "LINK_ADDITION",
+  WEIGHT_CHANGE = "WEIGHT_CHANGE",
+}
+
+
+===== FILE: ./lib/stores/Link.ts =====
+
+import type { Node } from "./Node";
+
+export class Link {
+  public source: Node;
+  public target: Node;
+  public weight: number;
+  public id: string;
+
+  constructor(id: string, source: Node, target: Node, weight: number) {
+    this.id = id;
+    this.source = source;
+    this.target = target;
+    this.weight = weight;
+  }
+
+  public setWeight(newWeight: number): void {
+    this.weight = newWeight;
+  }
+
+  public updateCost(cost: number): void {
+    this.weight = cost;
+  }
+}
+
+
+===== FILE: ./lib/stores/LinkStateStrategy.ts =====
+
+import { RoutingEntry } from "./RoutingEntry";
+import type { Router } from "./Router";
+import type { Topology } from "./Topology";
+import type { RoutingStrategy } from "./RoutingStrategy";
+
+export class LinkStateStrategy implements RoutingStrategy {
+  public executeStep(router: Router, topology: Topology): void {
+    const nodes = Array.from(topology.nodes.values());
+
+    // Dijkstra: Distanz- und Vorgänger-Map
+    const dist = new Map<string, number>();
+    const prev = new Map<string, string | null>();
+
+    for (const node of nodes) {
+      dist.set(node.id, Number.POSITIVE_INFINITY);
+      prev.set(node.id, null);
+    }
+    dist.set(router.id, 0);
+
+    const visited = new Set<string>();
+
+    while (visited.size < nodes.length) {
+      // Knoten mit minimaler Distanz wählen
+      let currentId: string | null = null;
+      let currentDist = Number.POSITIVE_INFINITY;
+
+      for (const [id, d] of dist) {
+        if (!visited.has(id) && d < currentDist) {
+          currentDist = d;
+          currentId = id;
+        }
+      }
+
+      if (currentId === null || currentDist === Number.POSITIVE_INFINITY) {
+        break;
+      }
+
+      visited.add(currentId);
+
+      const currentNode = topology.nodes.get(currentId);
+      if (!currentNode) continue;
+
+      // Nachbarn über die Link-Liste des Knotens
+      for (const link of currentNode.neighbors) {
+        const neighbor =
+          link.source === currentNode ? link.target : link.source;
+        const neighborId = neighbor.id;
+
+        if (visited.has(neighborId)) {
+          continue;
+        }
+
+        const alt =
+          (dist.get(currentId) ?? Number.POSITIVE_INFINITY) + link.weight;
+
+        if (alt < (dist.get(neighborId) ?? Number.POSITIVE_INFINITY)) {
+          dist.set(neighborId, alt);
+          prev.set(neighborId, currentId);
+        }
+      }
+    }
+
+    // Routing-Tabelle des Routers neu aufbauen
+    router.routingTable.entries.clear();
+
+    for (const node of nodes) {
+      const destId = node.id;
+      if (destId === router.id) {
+        continue;
+      }
+
+      const cost = dist.get(destId);
+      if (cost === undefined || cost === Number.POSITIVE_INFINITY) {
+        continue; // nicht erreichbar
+      }
+
+      const nextHopId = this.getFirstHopOnPath(router.id, destId, prev);
+      if (!nextHopId) {
+        continue;
+      }
+
+      router.routingTable.entries.set(
+        destId,
+        new RoutingEntry(destId, nextHopId, cost)
+      );
+    }
+
+    // Optional: Eintrag für sich selbst (Kosten 0)
+    router.routingTable.entries.set(
+      router.id,
+      new RoutingEntry(router.id, router.id, 0)
+    );
+  }
+
+  private getFirstHopOnPath(
+    sourceId: string,
+    destId: string,
+    prev: Map<string, string | null>
+  ): string | null {
+    let currentId: string | null = destId;
+    let parentId = prev.get(currentId) ?? null;
+
+    if (parentId === null) {
+      return null;
+    }
+
+    while (parentId !== null && parentId !== sourceId) {
+      currentId = parentId;
+      parentId = prev.get(currentId) ?? null;
+    }
+
+    if (parentId === sourceId && currentId !== null) {
+      return currentId;
+    }
+
+    return null;
+  }
+}
+
+
+===== FILE: ./lib/stores/MinHeap.ts =====
+
+export class MinHeap<T> {
+  private items: T[] = [];
+  private readonly comparator: (a: T, b: T) => number;
+
+  constructor(comparator: (a: T, b: T) => number) {
+    this.comparator = comparator;
+  }
+
+  public insert(item: T): void {
+    this.items.push(item);
+    this.bubbleUp(this.items.length - 1);
+  }
+
+  public extractMin(): T | undefined {
+    if (this.items.length === 0) {
+      return undefined;
+    }
+    if (this.items.length === 1) {
+      return this.items.pop();
+    }
+    const min = this.items[0];
+    this.items[0] = this.items.pop() as T;
+    this.bubbleDown(0);
+    return min;
+  }
+
+  public peek(): T | undefined {
+    return this.items[0];
+  }
+
+  public isEmpty(): boolean {
+    return this.items.length === 0;
+  }
+
+  private bubbleUp(index: number): void {
+    while (index > 0) {
+      const parentIndex = Math.floor((index - 1) / 2);
+      if (this.comparator(this.items[index], this.items[parentIndex]) >= 0) {
+        break;
+      }
+      this.swap(index, parentIndex);
+      index = parentIndex;
+    }
+  }
+
+  private bubbleDown(index: number): void {
+    const length = this.items.length;
+    while (true) {
+      const left = 2 * index + 1;
+      const right = 2 * index + 2;
+      let smallest = index;
+
+      if (left < length && this.comparator(this.items[left], this.items[smallest]) < 0) {
+        smallest = left;
+      }
+      if (right < length && this.comparator(this.items[right], this.items[smallest]) < 0) {
+        smallest = right;
+      }
+      if (smallest === index) {
+        break;
+      }
+      this.swap(index, smallest);
+      index = smallest;
+    }
+  }
+
+  private swap(i: number, j: number): void {
+    const tmp = this.items[i];
+    this.items[i] = this.items[j];
+    this.items[j] = tmp;
+  }
+}
+
+
+===== FILE: ./lib/stores/Node.ts =====
+
+import type { Link } from "./Link";
+import type { Packet } from "./Packet";
+
+export abstract class Node {
+  public id: string;
+  public name: string;
+  public xPos: number;
+  public yPos: number;
+  public neighbors: Link[] = [];
+
+  constructor(id: string, name: string, xPos: number, yPos: number) {
+    this.id = id;
+    this.name = name;
+    this.xPos = xPos;
+    this.yPos = yPos;
+  }
+
+  public abstract receivePacket(p: Packet): void;
+
+  public abstract sendPacket(p: Packet, target: string): void;
+}
+
+
+===== FILE: ./lib/stores/Packet.ts =====
+
+export abstract class Packet {
+  public sourceId: string;
+  public targetId: string;
+  public currentLinkId: string;
+
+  constructor(sourceId: string, targetId: string, currentLinkId: string) {
+    this.sourceId = sourceId;
+    this.targetId = targetId;
+    this.currentLinkId = currentLinkId;
+  }
+}
+
+
+===== FILE: ./lib/stores/Router.ts =====
+
+import { Node } from "./Node";
+import { RoutingTable } from "./RoutingTable";
+import type { RoutingStrategy } from "./RoutingStrategy";
+import type { Packet } from "./Packet";
+
+export class Router extends Node {
+  public routingTable: RoutingTable;
+  public strategy: RoutingStrategy | null = null;
+  public optimal: boolean = false;
+
+  constructor(id: string, name: string, xPos: number, yPos: number, routingTable?: RoutingTable) {
+    super(id, name, xPos, yPos);
+    this.routingTable = routingTable ?? new RoutingTable();
+  }
+
+  public setStrategy(s: RoutingStrategy): void {
+    this.strategy = s;
+  }
+
+  public executeRoutingStep(): void {
+    // unknown behaviour -> left empty on purpose
+  }
+
+  public receivePacket(_p: Packet): void {
+    // unknown behaviour -> left empty on purpose
+  }
+
+  public sendPacket(_p: Packet, _target: string): void {
+    // unknown behaviour -> left empty on purpose
+  }
+}
+
+
+===== FILE: ./lib/stores/RouterState.ts =====
+
+import { RoutingEntry } from "./RoutingEntry";
+
+export class RouterState {
+  public entries: Map<string, RoutingEntry[]>;
+
+  constructor() {
+    this.entries = new Map<string, RoutingEntry[]>();
+  }
+}
+
+
+===== FILE: ./lib/stores/RoutingEntry.ts =====
+
+export class RoutingEntry {
+  public destinationId: string;
+  public nextHopId: string;
+  public cost: number;
+
+  constructor(destinationId: string, nextHopId: string, cost: number) {
+    this.destinationId = destinationId;
+    this.nextHopId = nextHopId;
+    this.cost = cost;
+  }
+
+  public update(nextHopId: string, cost: number): void {
+    this.nextHopId = nextHopId;
+    this.cost = cost;
+  }
+}
+
+
+===== FILE: ./lib/stores/RoutingPacket.ts =====
+
+import { Packet } from "./Packet";
+
+export class RoutingPacket extends Packet {
+}
+
+
+===== FILE: ./lib/stores/RoutingStrategieType.ts =====
+
+export enum RoutingStrategieType {
+  LINK_STATE = "LINK_STATE",
+  DISTANCE_VECTOR = "DISTANCE_VECTOR",
+  DISTANCE_VECTOR_POISONED = "DISTANCE_VECTOR_POISONED",
+}
+
+// Alias used by SimulationController#setAlgorithm according to the UML
+export type AlgorithmType = RoutingStrategieType;
+
+
+===== FILE: ./lib/stores/RoutingStrategy.ts =====
+
+import type { Router } from "./Router";
+import type { Topology } from "./Topology";
+
+export interface RoutingStrategy {
+  executeStep(router: Router, topology: Topology): void;
+}
+
+
+===== FILE: ./lib/stores/RoutingTable.ts =====
+
+import { RoutingEntry } from "./RoutingEntry";
+
+export class RoutingTable {
+  public entries: Map<string, RoutingEntry>;
+
+  constructor() {
+    this.entries = new Map<string, RoutingEntry>();
+  }
+
+  public addEntry(destinationId: string, nextHop: string, cost: number): void {
+    const entry = new RoutingEntry(destinationId, nextHop, cost);
+    this.entries.set(destinationId, entry);
+  }
+
+  public deleteEntry(destinationId: string): void {
+    this.entries.delete(destinationId);
+  }
+}
+
+
+===== FILE: ./lib/stores/SimulationController.ts =====
+
+// src/lib/stores/SimulationController.ts
+
+import { Topology } from "./Topology";
+import { SimulationState } from "./SimulationState";
+import { SimulationEvent } from "./SimulationEvent";
+import { MinHeap } from "./MinHeap";
+import { EventType } from "./EventType";
+import { Link } from "./Link";
+import { Router } from "./Router";
+import { EndDevice } from "./EndDevice";
+import { RoutingStrategieType, type AlgorithmType } from "./RoutingStrategieType";
+import { LinkStateStrategy } from "./LinkStateStrategy";
+import { DistanceVectorStrategy } from "./DistanceVectorStrategy";
+
+export class SimulationController {
+  // made public so Svelte can bind directly (Timeline, Editor, etc.)
+  public currentStepIndex: number;
+  public history: SimulationState[];
+  public topology: Topology;
+
+  private events: MinHeap<SimulationEvent>;
+  private nodeEventMap: Map<string, SimulationEvent[]>;
+  private linkEventMap: Map<string, SimulationEvent[]>;
+  private playing: boolean;
+
+  constructor(topology: Topology) {
+    this.topology = topology;
+    this.currentStepIndex = 0;
+    this.history = [];
+    this.events = new MinHeap<SimulationEvent>((a, b) => a.step - b.step);
+    this.nodeEventMap = new Map<string, SimulationEvent[]>();
+    this.linkEventMap = new Map<string, SimulationEvent[]>();
+    this.playing = false;
+
+    this.pushState();
+  }
+
+  // convenience getters for UI
+  public get running(): boolean {
+    return this.playing;
+  }
+
+  public get isPlaying(): boolean {
+    return this.playing;
+  }
+
+  // ----------------------------- Basis / Timeline ----------------------------
+
+  private pushState(): void {
+    const state = new SimulationState(this.currentStepIndex, this.topology);
+    this.history.push(state);
+  }
+
+  public jumpToStep(step: number): SimulationState {
+    if (step < 0) {
+      step = 0;
+    }
+
+    // only simulate forward if needed
+    while (this.currentStepIndex < step) {
+      this.nextStep();
+      if (this.currentStepIndex === step) {
+        break;
+      }
+    }
+
+    const found = this.history.find((s) => s.stepNumber === step);
+    return found ?? this.history[this.history.length - 1];
+  }
+
+  public play(): void {
+    this.playing = true;
+  }
+
+  public pause(): void {
+    this.playing = false;
+  }
+
+  // -------------------------- Routing-Algorithmus ---------------------------
+
+  public setAlgorithm(algo: AlgorithmType): void {
+    for (const node of this.topology.nodes.values()) {
+      if (node instanceof Router) {
+        switch (algo) {
+          case RoutingStrategieType.LINK_STATE:
+            node.setStrategy(new LinkStateStrategy());
+            break;
+          case RoutingStrategieType.DISTANCE_VECTOR:
+            node.setStrategy(new DistanceVectorStrategy(false));
+            break;
+          case RoutingStrategieType.DISTANCE_VECTOR_POISONED:
+            node.setStrategy(new DistanceVectorStrategy(true));
+            break;
+          default:
+            node.setStrategy(new LinkStateStrategy());
+            break;
+        }
+      }
+    }
+  }
+
+  public getTopology(): Topology {
+    return this.topology;
+  }
+
+  // ------------------------------- Events ------------------------------------
+
+  public addEvent(e: SimulationEvent): void {
+    this.events.insert(e);
+
+    if (
+      e.type === EventType.NODE_FAILURE ||
+      e.type === EventType.NODE_ADDITION
+    ) {
+      const list = this.nodeEventMap.get(e.targetId) ?? [];
+      list.push(e);
+      this.nodeEventMap.set(e.targetId, list);
+    } else {
+      const list = this.linkEventMap.get(e.targetId) ?? [];
+      list.push(e);
+      this.linkEventMap.set(e.targetId, list);
+    }
+  }
+
+  private applyEvent(event: SimulationEvent): void {
+    switch (event.type) {
+      case EventType.NODE_FAILURE: {
+        this.deleteNode(event.targetId);
+        break;
+      }
+      case EventType.LINK_FAILURE: {
+        const link = this.findLinkById(event.targetId);
+        if (link) {
+          this.removeLinkInstance(link);
+        }
+        break;
+      }
+      case EventType.WEIGHT_CHANGE: {
+        const link = this.findLinkById(event.targetId);
+        if (link) {
+          link.setWeight(event.argument);
+        }
+        break;
+      }
+      case EventType.NODE_ADDITION:
+        // not clearly specified -> no-op for now
+        break;
+      case EventType.LINK_ADDITION:
+        // not clearly specified -> no-op for now
+        break;
+      default:
+        break;
+    }
+  }
+
+  private findLinkById(id: string): Link | undefined {
+    return this.topology.links.find((l) => l.id === id);
+  }
+
+  private removeLinkInstance(link: Link): void {
+    this.topology.links = this.topology.links.filter((l) => l !== link);
+    link.source.neighbors = link.source.neighbors.filter((l) => l !== link);
+    link.target.neighbors = link.target.neighbors.filter((l) => l !== link);
+  }
+
+  // ------------------------ Topologie verändern ------------------------------
+
+  private generateRouterId(): string {
+    let index = 1;
+    while (this.topology.nodes.has(`R${index}`)) {
+      index++;
+    }
+    return `R${index}`;
+  }
+
+  private generateLinkId(): string {
+    let index = 1;
+    while (this.topology.links.some((l) => l.id === `L${index}`)) {
+      index++;
+    }
+    return `L${index}`;
+  }
+
+  public addNode(xPos: number, yPos: number): void {
+    const id = this.generateRouterId();
+    const router = new Router(id, `Router ${id}`, xPos, yPos);
+    this.topology.nodes.set(router.id, router);
+    this.pushState();
+  }
+
+  public addLink(sourceId: string, targetId: string, weight: number): void {
+    const source = this.topology.nodes.get(sourceId);
+    const target = this.topology.nodes.get(targetId);
+    if (!source || !target) {
+      throw new Error("Source or target node does not exist");
+    }
+
+    const id = this.generateLinkId();
+    const link = new Link(id, source, target, weight);
+    this.topology.links.push(link);
+    source.neighbors.push(link);
+    target.neighbors.push(link);
+
+    this.pushState();
+  }
+
+  public deleteNode(nodeId: string): void {
+    const node = this.topology.nodes.get(nodeId);
+    if (!node) {
+      return;
+    }
+
+    const linksToRemove = this.topology.links.filter(
+      (link) => link.source === node || link.target === node
+    );
+    for (const link of linksToRemove) {
+      this.removeLinkInstance(link);
+    }
+
+    this.topology.nodes.delete(nodeId);
+    this.pushState();
+  }
+
+  public deleteLink(sourceId: string, targetId: string): void {
+    const source = this.topology.nodes.get(sourceId);
+    const target = this.topology.nodes.get(targetId);
+    if (!source || !target) {
+      return;
+    }
+
+    const link = this.topology.links.find(
+      (l) =>
+        (l.source === source && l.target === target) ||
+        (l.source === target && l.target === source)
+    );
+    if (!link) {
+      return;
+    }
+
+    this.removeLinkInstance(link);
+    this.pushState();
+  }
+
+  // ---------------------------- Simulationsschritt ---------------------------
+
+  public nextStep(): void {
+    this.currentStepIndex++;
+
+    // handle all events scheduled for this step
+    while (true) {
+      const peek = this.events.peek();
+      if (!peek || peek.step > this.currentStepIndex) {
+        break;
+      }
+      const ev = this.events.extractMin();
+      if (ev) {
+        this.applyEvent(ev);
+      }
+    }
+
+    // execute routing strategy for all routers
+    for (const node of this.topology.nodes.values()) {
+      if (node instanceof Router && node.strategy) {
+        node.strategy.executeStep(node, this.topology);
+      }
+    }
+
+    this.pushState();
+  }
+
+  // ------------------------- Pfad anhand Routingtabellen ---------------------
+
+  private getFirstRouterNeighbor(device: EndDevice): Router | null {
+    for (const link of device.neighbors) {
+      const other = link.source === device ? link.target : link.source;
+      if (other instanceof Router) {
+        return other;
+      }
+    }
+    return null;
+  }
+
+  public getPath(sourceId: string, targetId: string): string[] {
+    const sourceNode = this.topology.nodes.get(sourceId);
+    const targetNode = this.topology.nodes.get(targetId);
+
+    if (!sourceNode || !targetNode) {
+      return [];
+    }
+
+    let startRouter: Router | null = null;
+    let targetRouter: Router | null = null;
+    const path: string[] = [];
+
+    // start
+    if (sourceNode instanceof Router) {
+      startRouter = sourceNode;
+      path.push(sourceNode.id);
+    } else if (sourceNode instanceof EndDevice) {
+      const r = this.getFirstRouterNeighbor(sourceNode);
+      if (!r) return [];
+      startRouter = r;
+      path.push(sourceNode.id, r.id);
+    } else {
+      return [];
+    }
+
+    // target
+    let appendTargetDevice = false;
+    if (targetNode instanceof Router) {
+      targetRouter = targetNode;
+    } else if (targetNode instanceof EndDevice) {
+      const r = this.getFirstRouterNeighbor(targetNode);
+      if (!r) return [];
+      targetRouter = r;
+      appendTargetDevice = true;
+    } else {
+      return [];
+    }
+
+    if (!startRouter || !targetRouter) {
+      return [];
+    }
+
+    const visited = new Set<string>();
+    let currentId = startRouter.id;
+    visited.add(currentId);
+
+    while (currentId !== targetRouter.id) {
+      const currentNode = this.topology.nodes.get(currentId);
+      if (!(currentNode instanceof Router) || !currentNode.routingTable) {
+        return [];
+      }
+
+      const entry = currentNode.routingTable.entries.get(targetRouter.id);
+      if (!entry) {
+        return [];
+      }
+
+      const nextHopId = entry.nextHopId;
+      if (visited.has(nextHopId)) {
+        // loop
+        return [];
+      }
+      visited.add(nextHopId);
+
+      if (path[path.length - 1] !== nextHopId) {
+        path.push(nextHopId);
+      }
+
+      currentId = nextHopId;
+
+      if (path.length > this.topology.nodes.size + 2) {
+        // safety brake
+        return [];
+      }
+    }
+
+    if (appendTargetDevice && path[path.length - 1] !== targetId) {
+      path.push(targetId);
+    }
+
+    // mark routers on path as optimal
+    for (const node of this.topology.nodes.values()) {
+      if (node instanceof Router) {
+        node.optimal = false;
+      }
+    }
+    for (const id of path) {
+      const node = this.topology.nodes.get(id);
+      if (node instanceof Router) {
+        node.optimal = true;
+      }
+    }
+
+    return path;
+  }
+
+  // ------------------------------ JSON Import/Export -------------------------
+
+  public importJson(jsonString: string): void {
+    const data = JSON.parse(jsonString);
+
+    const newTopology = new Topology();
+
+    // Nodes
+    if (Array.isArray(data.nodes)) {
+      for (const raw of data.nodes) {
+        if (!raw || typeof raw.id !== "string") {
+          continue;
+        }
+        const id: string = raw.id;
+        const name: string = raw.name ?? raw.id;
+        const xPos: number = typeof raw.xPos === "number" ? raw.xPos : 0;
+        const yPos: number = typeof raw.yPos === "number" ? raw.yPos : 0;
+        const type: string = raw.type ?? "router";
+
+        let node: Router | EndDevice;
+        if (type === "endDevice") {
+          node = new EndDevice(id, name, xPos, yPos);
+        } else {
+          node = new Router(id, name, xPos, yPos);
+        }
+        newTopology.nodes.set(id, node);
+      }
+    }
+
+    // Links
+    if (Array.isArray(data.links)) {
+      for (const raw of data.links) {
+        if (!raw) continue;
+        const id: string = raw.id ?? "";
+        const sourceId: string = raw.sourceId;
+        const targetId: string = raw.targetId;
+        const weight: number =
+          typeof raw.weight === "number" ? raw.weight : 1;
+
+        const source = newTopology.nodes.get(sourceId);
+        const target = newTopology.nodes.get(targetId);
+        if (!source || !target) continue;
+
+        const link = new Link(id, source, target, weight);
+        newTopology.links.push(link);
+        source.neighbors.push(link);
+        target.neighbors.push(link);
+      }
+    }
+
+    this.topology = newTopology;
+
+    // Events
+    this.events = new MinHeap<SimulationEvent>((a, b) => a.step - b.step);
+    this.nodeEventMap = new Map<string, SimulationEvent[]>();
+    this.linkEventMap = new Map<string, SimulationEvent[]>();
+
+    if (Array.isArray(data.events)) {
+      for (const raw of data.events) {
+        if (!raw) continue;
+        const step: number =
+          typeof raw.step === "number" ? raw.step : 0;
+        const type: EventType = raw.type as EventType;
+        const targetId: string = raw.targetId;
+        const argument: number =
+          typeof raw.argument === "number" ? raw.argument : 0;
+
+        const e = new SimulationEvent(step, type, targetId, argument);
+        this.addEvent(e);
+      }
+    }
+
+    this.currentStepIndex = 0;
+    this.history = [];
+    this.playing = false;
+    this.pushState();
+  }
+
+  public exportJson(): string {
+    const nodes = Array.from(this.topology.nodes.values()).map((n) => ({
+      id: n.id,
+      name: n.name,
+      xPos: n.xPos,
+      yPos: n.yPos,
+      type: n instanceof EndDevice ? "endDevice" : "router",
+    }));
+
+    const links = this.topology.links.map((l) => ({
+      id: l.id,
+      sourceId: l.source.id,
+      targetId: l.target.id,
+      weight: l.weight,
+    }));
+
+    const events: {
+      step: number;
+      type: EventType;
+      targetId: string;
+      argument: number;
+    }[] = [];
+
+    for (const list of this.nodeEventMap.values()) {
+      for (const e of list) {
+        events.push({
+          step: e.step,
+          type: e.type,
+          targetId: e.targetId,
+          argument: e.argument,
+        });
+      }
+    }
+
+    for (const list of this.linkEventMap.values()) {
+      for (const e of list) {
+        events.push({
+          step: e.step,
+          type: e.type,
+          targetId: e.targetId,
+          argument: e.argument,
+        });
+      }
+    }
+
+    return JSON.stringify({ nodes, links, events }, null, 2);
+  }
+}
+
+
+
+===== FILE: ./lib/stores/SimulationEvent.ts =====
+
+import { EventType } from "./EventType";
+
+export class SimulationEvent {
+  public step: number;
+  public type: EventType;
+  public targetId: string;
+  public argument: number;
+
+  constructor(step: number, type: EventType, targetId: string, argument: number) {
+    this.step = step;
+    this.type = type;
+    this.targetId = targetId;
+    this.argument = argument;
+  }
+}
+
+
+===== FILE: ./lib/stores/SimulationState.ts =====
+
+import { Topology } from "./Topology";
+
+export class SimulationState {
+  public stepNumber: number;
+  public topologyState: Topology;
+
+  constructor(stepNumber: number, topologyState: Topology) {
+    this.stepNumber = stepNumber;
+    this.topologyState = topologyState;
+  }
+}
+
+
+===== FILE: ./lib/stores/TestPacket.ts =====
+
+import { Packet } from "./Packet";
+
+export class TestPacket extends Packet {
+}
+
+
+===== FILE: ./lib/stores/Topology.ts =====
+
+import type { Node } from "./Node";
+import type { Link } from "./Link";
+
+export class Topology {
+  public nodes: Map<string, Node>;
+  public links: Link[];
+
+  constructor(nodes?: Map<string, Node>, links?: Link[]) {
+    this.nodes = nodes ?? new Map<string, Node>();
+    this.links = links ?? [];
+  }
+}
+
+
+===== FILE: ./lib/stores/simulation.ts =====
+
+// src/lib/stores/simulation.ts
+import { writable } from 'svelte/store';
+
+import { SimulationController } from './SimulationController';
+import type { AlgorithmType } from './RoutingStrategieType';
+import type { SimulationEvent } from './SimulationEvent';
+import type { SimulationState } from './SimulationState';
+import { Topology } from './Topology';
+import type { Node } from './Node';
+import { Router } from './Router';
+import { Link } from './Link';
+import { RoutingTable } from './RoutingTable';
+
+// ---------------------------------------------------------------------------
+// Sample topology for testing (3 routers in a line: R1 - R2 - R3)
+// with example routing tables
+// ---------------------------------------------------------------------------
+
+function createSampleTopology(): Topology {
+  const nodes = new Map<string, Node>();
+
+  // R1 routing table
+  const r1Table = new RoutingTable();
+  // R1 → R2 direct
+  r1Table.addEntry('R2', 'R2', 1);
+  // R1 → R3 via R2
+  r1Table.addEntry('R3', 'R2', 2);
+
+  // R2 routing table
+  const r2Table = new RoutingTable();
+  // R2 → R1 direct
+  r2Table.addEntry('R1', 'R1', 1);
+  // R2 → R3 direct
+  r2Table.addEntry('R3', 'R3', 1);
+
+  // R3 routing table
+  const r3Table = new RoutingTable();
+  // R3 → R2 direct
+  r3Table.addEntry('R2', 'R2', 1);
+  // R3 → R1 via R2
+  r3Table.addEntry('R1', 'R2', 2);
+
+  const r1 = new Router('R1', 'R1', 100, 200, r1Table);
+  const r2 = new Router('R2', 'R2', 300, 200, r2Table);
+  const r3 = new Router('R3', 'R3', 500, 200, r3Table);
+
+  nodes.set(r1.id, r1);
+  nodes.set(r2.id, r2);
+  nodes.set(r3.id, r3);
+
+  const links: Link[] = [
+    new Link('L1', r1, r2, 1),
+    new Link('L2', r2, r3, 1)
+  ];
+
+  return new Topology(nodes, links);
+}
+
+// ---------------------------------------------------------------------------
+// Main simulation store: single SimulationController instance
+// ---------------------------------------------------------------------------
+
+export const simulation = writable(new SimulationController(createSampleTopology()));
+
+// ---------------------------------------------------------------------------
+// Router selection state (used by Editor.svelte & RouterTablePanel.svelte)
+// ---------------------------------------------------------------------------
+
+export const selectedRouterId = writable<string | null>(null);
+
+export function setSelectedRouter(id: string | null): void {
+  selectedRouterId.set(id);
+}
+
+// ---------------------------------------------------------------------------
+// Placement mode: "drawing" routers in the canvas
+// ---------------------------------------------------------------------------
+
+export const placementMode = writable<'none' | 'router'>('none');
+
+export function toggleRouterPlacement(): void {
+  placementMode.update((m) => (m === 'router' ? 'none' : 'router'));
+}
+
+export function clearPlacementMode(): void {
+  placementMode.set('none');
+}
+
+// ---------------------------------------------------------------------------
+// Control of the simulation (playback etc.)
+// ---------------------------------------------------------------------------
+
+export function play(): void {
+  simulation.update((controller) => {
+    controller.play();
+    return controller;
+  });
+}
+
+export function pause(): void {
+  simulation.update((controller) => {
+    controller.pause();
+    return controller;
+  });
+}
+
+// setAlgorithm uses your AlgorithmType from RoutingStrategieType.ts
+export function setAlgorithm(algo: AlgorithmType): void {
+  simulation.update((controller) => {
+    controller.setAlgorithm(algo);
+    return controller;
+  });
+}
+
+// Jump to specific step (Timeline)
+export function jumpToStep(step: number): SimulationState {
+  let state!: SimulationState;
+  simulation.update((controller) => {
+    state = controller.jumpToStep(step);
+    return controller;
+  });
+  return state;
+}
+
+// Underlying "next step" from the backend
+export function nextStep(): void {
+  simulation.update((controller) => {
+    controller.nextStep();
+    return controller;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Wrappers expected by PlaybackControls.svelte
+// ---------------------------------------------------------------------------
+
+// step forward → just call nextStep()
+export function stepForward(): void {
+  nextStep();
+}
+
+// "step back": read currentStepIndex (via any) and jumpToStep(current - 1)
+export function stepBackward(): void {
+  simulation.update((controller) => {
+    const anyCtrl = controller as any;
+    const current: number = anyCtrl.currentStepIndex ?? 0;
+    const prev = Math.max(0, current - 1);
+    controller.jumpToStep(prev);
+    return controller;
+  });
+}
+
+// stop → go to step 0
+export function stop(): void {
+  simulation.update((controller) => {
+    controller.jumpToStep(0);
+    return controller;
+  });
+}
+
+// reset → recreate controller with same topology (simple reset)
+export function reset(): void {
+  simulation.update((controller) => {
+    const topo = controller.getTopology();
+    return new SimulationController(topo);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Topology operations (Editor / palette)
+// ---------------------------------------------------------------------------
+
+export function addNode(xPos: number, yPos: number): void {
+  simulation.update((controller) => {
+    controller.addNode(xPos, yPos);
+    return controller;
+  });
+}
+
+export function addLink(sourceId: string, targetId: string, weight: number): void {
+  simulation.update((controller) => {
+    controller.addLink(sourceId, targetId, weight);
+    return controller;
+  });
+}
+
+export function deleteNode(nodeId: string): void {
+  simulation.update((controller) => {
+    controller.deleteNode(nodeId);
+    return controller;
+  });
+}
+
+export function deleteLink(sourceId: string, targetId: string): void {
+  simulation.update((controller) => {
+    controller.deleteLink(sourceId, targetId);
+    return controller;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Events
+// ---------------------------------------------------------------------------
+
+export function addEvent(event: SimulationEvent): void {
+  simulation.update((controller) => {
+    controller.addEvent(event);
+    return controller;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Queries / helpers
+// ---------------------------------------------------------------------------
+
+export function getTopology(): Topology {
+  let topology!: Topology;
+  simulation.update((controller) => {
+    topology = controller.getTopology();
+    return controller;
+  });
+  return topology;
+}
+
+export function getPath(sourceId: string, targetId: string): string[] {
+  let path: string[] = [];
+  simulation.update((controller) => {
+    path = controller.getPath(sourceId, targetId);
+    return controller;
+  });
+  return path;
+}
+
+// ---------------------------------------------------------------------------
+// Import / Export
+// ---------------------------------------------------------------------------
+
+export function importJson(json: string): void {
+  simulation.update((controller) => {
+    controller.importJson(json);
+    return controller;
+  });
+}
+
+export function exportJson(): string {
+  let result = '';
+  simulation.update((controller) => {
+    result = controller.exportJson();
+    return controller;
+  });
+  return result;
+}
+
+
+
+===== FILE: ./lib/stores/staticNetworkConfig.ts =====
+
+import { SimulationController } from "./SimulationController";
+import { Topology } from "./Topology";
+import { Router } from "./Router";
+import { EndDevice } from "./EndDevice";
+import { Link } from "./Link";
+
+/**
+ * Erzeugt einen festen Beispiel-Network-Graphen:
+ *
+ *   E1 -- R1 ---- R2 -- E2
+ *          |      |
+ *         R3 ---- R4
+ *
+ * Koordinaten sind so gewählt, dass man im Frontend ein schönes Quadrat sieht.
+ */
+export function createStaticSimulationController(): SimulationController {
+  const topology = new Topology();
+
+  // --- Router ---------------------------------------------------------------
+  const r1 = new Router("R1", "Router 1", 100, 100);
+  const r2 = new Router("R2", "Router 2", 300, 100);
+  const r3 = new Router("R3", "Router 3", 100, 300);
+  const r4 = new Router("R4", "Router 4", 300, 300);
+
+  topology.nodes.set(r1.id, r1);
+  topology.nodes.set(r2.id, r2);
+  topology.nodes.set(r3.id, r3);
+  topology.nodes.set(r4.id, r4);
+
+  // --- Endgeräte ------------------------------------------------------------
+  const e1 = new EndDevice("E1", "Endgerät 1", 20, 100);
+  const e2 = new EndDevice("E2", "Endgerät 2", 380, 100);
+
+  topology.nodes.set(e1.id, e1);
+  topology.nodes.set(e2.id, e2);
+
+  // --- Links ---------------------------------------------------------------
+
+  const links: Link[] = [];
+
+  function connect(id: string, a: Router | EndDevice, b: Router | EndDevice, weight: number): void {
+    const link = new Link(id, a, b, weight);
+    links.push(link);
+    a.neighbors.push(link);
+    b.neighbors.push(link);
+  }
+
+  // Quadrat der Router
+  connect("L1", r1, r2, 1);
+  connect("L2", r2, r4, 1);
+  connect("L3", r4, r3, 1);
+  connect("L4", r3, r1, 1);
+
+  // Diagonale (alternative Route)
+  connect("L5", r1, r4, 2);
+
+  // Endgeräte an R1/R2
+  connect("L6", e1, r1, 1);
+  connect("L7", e2, r2, 1);
+
+  topology.links = links;
+
+  return new SimulationController(topology);
+}
+
+
+===== FILE: ./routes/+layout.svelte =====
+
+<script>
+  import '../app.css';
+  import '@xyflow/svelte/dist/style.css';
+</script>
+
+<div class="app-root">
+  <slot />
+</div>
+
+
+
+===== FILE: ./routes/+page.svelte =====
+
+<script lang="ts">
+  import Toolbar from '$lib/components/Toolbar.svelte';
+  import Editor from '$lib/components/Editor.svelte';
+  import RouterPanel from '$lib/components/RouterPanel.svelte';
+  import Timeline from '$lib/components/Timeline.svelte';
+  import PlaybackControls from '$lib/components/PlaybackControls.svelte';
+  import RouterTablePanel from '$lib/components/RouterTablePanel.svelte';
+  import Packets from '$lib/components/Packets.svelte';
+
+  import { simulation } from '$lib/stores/simulation';
+
+  $: controller = $simulation as any;
+  $: currentStep = controller.currentStepIndex ?? 0;
+</script>
+
+<div class="canvas-layout">
+  <!-- main editor canvas -->
+  <div class="editor-shell">
+    <Editor />
+  </div>
+
+  <!-- top toolbar -->
+  <div class="top-bar">
+    <Toolbar />
+  </div>
+
+  <!-- left palette bar -->
+  <RouterPanel />
+
+  <!-- right routing-table panel & packets overlay -->
+  <RouterTablePanel />
+  <Packets />
+
+  <!-- bottom bar: current state + timeline + playback controls -->
+  <div class="bottom-bar">
+    <div class="current-state-pill">
+      Current state: {currentStep}
+    </div>
+
+    <Timeline />
+    <PlaybackControls />
+  </div>
+</div>
+
+

@@ -1,13 +1,16 @@
 <script lang="ts">
-  import { SvelteFlow, Background, type NodeTypes } from '@xyflow/svelte';
+  import { SvelteFlow, Background, type NodeTypes, useSvelteFlow } from '@xyflow/svelte';
   import RouterNode from '$lib/components/RouterNode.svelte';
   import {
     simulation,
     setSelectedRouter,
     addNode,
     placementMode,
-    clearPlacementMode
+    clearPlacementMode,
+    linkSourceRouterId
   } from '$lib/stores/simulation';
+
+  const { screenToFlowPosition } = useSvelteFlow();
 
   const proOptions = { hideAttribution: true };
 
@@ -63,11 +66,12 @@
   $: edges = mapTopologyLinksToFlowEdges(topology);
 
   // ---------------------------------------------------------------------------
-  // Router placement: click-and-drag to see a preview, release to place router
+  // Tools
   // ---------------------------------------------------------------------------
 
   $: mode = $placementMode;
 
+  // Router placement: click-and-drag to see a preview, release to place router
   let isPlacing = false;
   let previewX = 0;
   let previewY = 0;
@@ -100,16 +104,15 @@
   function handlePointerUp(event: PointerEvent) {
     if (!isPlacing) return;
 
-    const wrapper = event.currentTarget as HTMLDivElement;
-    const rect = wrapper.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    // Convert screen/client coords to flow coords (fixes fixed offset due to viewport/pan/zoom)
+    const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY });
 
-    addNode(x, y);
+    addNode(flowPos.x, flowPos.y);
 
     isPlacing = false;
     clearPlacementMode();
 
+    const wrapper = event.currentTarget as HTMLDivElement;
     try {
       wrapper.releasePointerCapture(event.pointerId);
     } catch {
@@ -129,10 +132,21 @@
     {edges}
     {nodeTypes}
     {proOptions}
+    nodeOrigin={[0.5, 0.5]}
     fitView
   >
     <Background />
   </SvelteFlow>
+
+  {#if mode === 'link'}
+    <div class="tool-hint">
+      {#if $linkSourceRouterId}
+        Link tool: select target router to connect with <b>{$linkSourceRouterId}</b>.
+      {:else}
+        Link tool: select the first router.
+      {/if}
+    </div>
+  {/if}
 
   {#if isPlacing && mode === 'router'}
     <!-- visual preview of the router under the cursor -->
@@ -144,4 +158,38 @@
     </div>
   {/if}
 </div>
+
+<style>
+  .tool-hint {
+    position: absolute;
+    left: 24px;
+    bottom: 130px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.9);
+    color: #e5e7eb;
+    font-size: 11px;
+    box-shadow: 0 4px 8px rgba(15, 23, 42, 0.25);
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  .router-preview {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 140px;
+    height: 60px;
+    border-radius: 18px;
+    background: rgba(2, 132, 199, 0.6);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    border: 2px dashed rgba(255, 255, 255, 0.75);
+    z-index: 20;
+    pointer-events: none;
+  }
+</style>
 
