@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { SvelteFlow, Background, type NodeTypes, useSvelteFlow } from '@xyflow/svelte';
+  import {
+    SvelteFlow,
+    Background,
+    type NodeTypes,
+    useSvelteFlow
+  } from '@xyflow/svelte';
+
   import RouterNode from '$lib/components/RouterNode.svelte';
   import {
     simulation,
@@ -7,7 +13,9 @@
     addNode,
     placementMode,
     clearPlacementMode,
-    linkSourceRouterId
+    linkSourceRouterId,
+    updateNodePosition,
+    updateNodePositions
   } from '$lib/stores/simulation';
 
   const { screenToFlowPosition } = useSvelteFlow();
@@ -18,19 +26,17 @@
     router: RouterNode
   };
 
-  // SimulationController instance from store
   $: controller = $simulation as any;
 
-  // Prefer getter if present
   $: topology =
     typeof controller.getTopology === 'function'
       ? controller.getTopology()
       : controller.topology;
 
-  function mapTopologyNodesToFlowNodes(topology: any) {
-    if (!topology || !topology.nodes) return [];
+  function mapTopologyNodesToFlowNodes(topo: any) {
+    if (!topo || !topo.nodes) return [];
 
-    const rawNodes = topology.nodes;
+    const rawNodes = topo.nodes;
     const nodesArray = Array.isArray(rawNodes)
       ? rawNodes
       : rawNodes instanceof Map
@@ -51,10 +57,10 @@
     }));
   }
 
-  function mapTopologyLinksToFlowEdges(topology: any) {
-    if (!topology || !topology.links) return [];
+  function mapTopologyLinksToFlowEdges(topo: any) {
+    if (!topo || !topo.links) return [];
 
-    return topology.links.map((link: any) => ({
+    return topo.links.map((link: any) => ({
       id: link.id,
       source: link.source?.id,
       target: link.target?.id,
@@ -65,13 +71,10 @@
   $: nodes = mapTopologyNodesToFlowNodes(topology);
   $: edges = mapTopologyLinksToFlowEdges(topology);
 
-  // ---------------------------------------------------------------------------
-  // Tools
-  // ---------------------------------------------------------------------------
-
   $: mode = $placementMode;
 
-  // Router placement: click-and-drag to see a preview, release to place router
+  // ---------------- Router placement ----------------
+
   let isPlacing = false;
   let previewX = 0;
   let previewY = 0;
@@ -87,8 +90,6 @@
     if (mode !== 'router') return;
 
     const target = event.target as HTMLElement;
-
-    // only start placement when clicking on the empty pane (not on a node)
     if (!target.classList.contains('svelte-flow__pane')) return;
 
     isPlacing = true;
@@ -104,9 +105,7 @@
   function handlePointerUp(event: PointerEvent) {
     if (!isPlacing) return;
 
-    // Convert screen/client coords to flow coords (fixes fixed offset due to viewport/pan/zoom)
     const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-
     addNode(flowPos.x, flowPos.y);
 
     isPlacing = false;
@@ -118,6 +117,48 @@
     } catch {
       // ignore
     }
+  }
+
+  // ---------------- Persist node movement into topology ----------------
+
+  function handleNodesChange(event: CustomEvent) {
+    const changes: any[] = Array.isArray(event.detail) ? event.detail : [];
+    if (changes.length === 0) return;
+
+    const updates: { id: string; xPos: number; yPos: number }[] = [];
+
+    for (const c of changes) {
+      if (!c || c.type !== 'position') continue;
+      if (c.dragging !== false) continue; // only commit final position
+      if (!c.position) continue;
+
+      updates.push({
+        id: String(c.id),
+        xPos: Number(c.position.x ?? 0),
+        yPos: Number(c.position.y ?? 0)
+      });
+    }
+
+    if (updates.length === 1) {
+      const u = updates[0];
+      updateNodePosition(u.id, u.xPos, u.yPos);
+      return;
+    }
+
+    if (updates.length > 1) {
+      updateNodePositions(updates);
+    }
+  }
+
+  function handleNodeDragStop(event: CustomEvent) {
+    const detail: any = event.detail;
+    const node: any = detail?.node;
+    if (!node) return;
+
+    const x = Number(node.position?.x ?? 0);
+    const y = Number(node.position?.y ?? 0);
+
+    updateNodePosition(String(node.id), x, y);
   }
 </script>
 
@@ -134,6 +175,10 @@
     {proOptions}
     nodeOrigin={[0.5, 0.5]}
     fitView
+    on:nodeschange={handleNodesChange}
+    on:nodesChange={handleNodesChange}
+    on:nodedragstop={handleNodeDragStop}
+    on:nodeDragStop={handleNodeDragStop}
   >
     <Background />
   </SvelteFlow>
@@ -149,7 +194,6 @@
   {/if}
 
   {#if isPlacing && mode === 'router'}
-    <!-- visual preview of the router under the cursor -->
     <div
       class="router-preview"
       style={`left: ${previewX}px; top: ${previewY}px;`}

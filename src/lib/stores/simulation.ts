@@ -13,30 +13,23 @@ import { RoutingTable } from './RoutingTable';
 
 // ---------------------------------------------------------------------------
 // Sample topology for testing (3 routers in a line: R1 - R2 - R3)
-// with example routing tables
-// NOTE: nodeOrigin is set to [0.5, 0.5] in Editor.svelte (center-origin),
-// so these positions are centers, not top-left corners.
 // ---------------------------------------------------------------------------
 
 function createSampleTopology(): Topology {
   const nodes = new Map<string, Node>();
 
-  // R1 routing table
   const r1Table = new RoutingTable();
   r1Table.addEntry('R2', 'R2', 1);
   r1Table.addEntry('R3', 'R2', 2);
 
-  // R2 routing table
   const r2Table = new RoutingTable();
   r2Table.addEntry('R1', 'R1', 1);
   r2Table.addEntry('R3', 'R3', 1);
 
-  // R3 routing table
   const r3Table = new RoutingTable();
   r3Table.addEntry('R2', 'R2', 1);
   r3Table.addEntry('R1', 'R2', 2);
 
-  // These coordinates are "centers" (because of nodeOrigin [0.5, 0.5])
   const r1 = new Router('R1', 'R1', 170, 230, r1Table);
   const r2 = new Router('R2', 'R2', 370, 230, r2Table);
   const r3 = new Router('R3', 'R3', 570, 230, r3Table);
@@ -48,7 +41,7 @@ function createSampleTopology(): Topology {
   const l1 = new Link('L1', r1, r2, 1);
   const l2 = new Link('L2', r2, r3, 1);
 
-  // IMPORTANT: initialize neighbors so routing strategies can see links
+  // IMPORTANT: initialize neighbors for algorithms
   r1.neighbors.push(l1);
   r2.neighbors.push(l1);
 
@@ -67,7 +60,7 @@ function createSampleTopology(): Topology {
 export const simulation = writable(new SimulationController(createSampleTopology()));
 
 // ---------------------------------------------------------------------------
-// Router selection state (used by Editor.svelte & RouterTablePanel.svelte)
+// Router selection state
 // ---------------------------------------------------------------------------
 
 export const selectedRouterId = writable<string | null>(null);
@@ -79,7 +72,6 @@ export const selectedRouterId = writable<string | null>(null);
 export type PlacementMode = 'none' | 'router' | 'link';
 export const placementMode = writable<PlacementMode>('none');
 
-// Link creation tool state
 export const linkSourceRouterId = writable<string | null>(null);
 export const linkTargetRouterId = writable<string | null>(null);
 export const linkWeight = writable<number>(1);
@@ -120,7 +112,7 @@ export function clearPlacementMode(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Selection behavior (normal selection + link-tool selection)
+// Selection behavior
 // ---------------------------------------------------------------------------
 
 export function setSelectedRouter(id: string | null): void {
@@ -134,7 +126,6 @@ export function setSelectedRouter(id: string | null): void {
     return;
   }
 
-  // Link tool: only allow routers
   const controller = get(simulation);
   const node = controller.topology.nodes.get(id);
   if (!(node instanceof Router)) {
@@ -148,20 +139,17 @@ export function setSelectedRouter(id: string | null): void {
     return;
   }
 
-  // clicking the same router again toggles off the source selection
   if (sourceId === id) {
     clearLinkSelection();
     return;
   }
 
-  // second router selected => create link
   linkTargetRouterId.set(id);
 
   const weight = get(linkWeight);
   try {
     addLink(sourceId, id, Number.isFinite(weight) && weight > 0 ? weight : 1);
   } finally {
-    // stay in link mode for rapid linking; clear selection for next link
     clearLinkSelection();
   }
 }
@@ -184,7 +172,6 @@ export function pause(): void {
   });
 }
 
-// setAlgorithm uses your AlgorithmType from RoutingStrategieType.ts
 export function setAlgorithm(algo: AlgorithmType): void {
   simulation.update((controller) => {
     controller.setAlgorithm(algo);
@@ -192,7 +179,6 @@ export function setAlgorithm(algo: AlgorithmType): void {
   });
 }
 
-// Jump to specific step (Timeline)
 export function jumpToStep(step: number): SimulationState {
   let state!: SimulationState;
   simulation.update((controller) => {
@@ -202,17 +188,12 @@ export function jumpToStep(step: number): SimulationState {
   return state;
 }
 
-// Underlying "next step" from the backend
 export function nextStep(): void {
   simulation.update((controller) => {
     controller.nextStep();
     return controller;
   });
 }
-
-// ---------------------------------------------------------------------------
-// Wrappers expected by PlaybackControls.svelte
-// ---------------------------------------------------------------------------
 
 export function stepForward(): void {
   nextStep();
@@ -243,7 +224,7 @@ export function reset(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Topology operations (Editor / palette)
+// Topology operations
 // ---------------------------------------------------------------------------
 
 export function addNode(xPos: number, yPos: number): void {
@@ -270,6 +251,24 @@ export function deleteNode(nodeId: string): void {
 export function deleteLink(sourceId: string, targetId: string): void {
   simulation.update((controller) => {
     controller.deleteLink(sourceId, targetId);
+    return controller;
+  });
+}
+
+// ------------------------------ NEW: movement -------------------------------
+
+export function updateNodePosition(nodeId: string, xPos: number, yPos: number): void {
+  simulation.update((controller) => {
+    controller.moveNode(nodeId, xPos, yPos);
+    return controller;
+  });
+}
+
+export function updateNodePositions(
+  updates: { id: string; xPos: number; yPos: number }[]
+): void {
+  simulation.update((controller) => {
+    controller.moveNodes(updates);
     return controller;
   });
 }
