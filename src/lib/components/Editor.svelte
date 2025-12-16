@@ -26,38 +26,64 @@
     router: RouterNode
   };
 
+  // SimulationController instance from store
   $: controller = $simulation as any;
 
+  // Prefer getter if present
   $: topology =
     typeof controller.getTopology === 'function'
       ? controller.getTopology()
       : controller.topology;
 
-  function mapTopologyNodesToFlowNodes(topo: any) {
+  // ---------------------------------------------------------------------------
+  // IMPORTANT: Use bind:nodes / bind:edges so XYFlow updates flowNodes on drag
+  // ---------------------------------------------------------------------------
+
+  let flowNodes: any[] = [];
+  let flowEdges: any[] = [];
+
+  // Keep last known flow positions without creating extra reactive dependencies
+  const lastFlowPositions = new Map<string, { x: number; y: number }>();
+  const prevDragging = new Map<string, boolean>();
+
+  function topologyNodesArray(topo: any): any[] {
     if (!topo || !topo.nodes) return [];
 
     const rawNodes = topo.nodes;
-    const nodesArray = Array.isArray(rawNodes)
-      ? rawNodes
-      : rawNodes instanceof Map
-        ? Array.from(rawNodes.values())
-        : [];
+    if (Array.isArray(rawNodes)) return rawNodes;
 
-    return nodesArray.map((node: any) => ({
-      id: node.id,
-      type: 'router',
-      position: {
-        x: node.xPos ?? 0,
-        y: node.yPos ?? 0
-      },
-      data: {
-        label: node.name ?? node.id,
-        onSelect: (id: string) => setSelectedRouter(id)
-      }
-    }));
+    if (rawNodes instanceof Map) {
+      return Array.from(rawNodes.values());
+    }
+
+    return [];
   }
 
-  function mapTopologyLinksToFlowEdges(topo: any) {
+  function buildFlowNodesFromTopology(topo: any): any[] {
+    const arr = topologyNodesArray(topo);
+
+    return arr.map((node: any) => {
+      const id = String(node.id);
+
+      // Prefer lastFlowPositions (what the user sees / dragged to),
+      // otherwise fall back to topology xPos/yPos
+      const pos = lastFlowPositions.get(id);
+      const x = pos ? pos.x : (node.xPos ?? 0);
+      const y = pos ? pos.y : (node.yPos ?? 0);
+
+      return {
+        id,
+        type: 'router',
+        position: { x, y },
+        data: {
+          label: node.name ?? id,
+          onSelect: (rid: string) => setSelectedRouter(rid)
+        }
+      };
+    });
+  }
+
+  function buildFlowEdgesFromTopology(topo: any): any[] {
     if (!topo || !topo.links) return [];
 
     return topo.links.map((link: any) => ({
@@ -68,12 +94,84 @@
     }));
   }
 
-  $: nodes = mapTopologyNodesToFlowNodes(topology);
-  $: edges = mapTopologyLinksToFlowEdges(topology);
+  // Whenever topology changes (due to store updates), rebuild flow nodes/edges.
+  // NOTE: we do NOT read flowNodes here (so we don't rerun on every drag tick).
+  $: if (topology) {
+    flowEdges = buildFlowEdgesFromTopology(topology);
+    flowNodes = buildFlowNodesFromTopology(topology);
+  }
+
+  // Track live positions as the user drags (this block reruns on drag ticks).
+  $: {
+    for (const n of flowNodes) {
+      if (!n || !n.id || !n.position) continue;
+      lastFlowPositions.set(String(n.id), { x: Number(n.position.x ?? 0), y: Number(n.position.y ?? 0) });
+    }
+  }
+
+  // Persist into SimulationController when a drag ends.
+  // This avoids spamming history during dragging.
+  $: {
+    const updates: { id: string; xPos: number; yPos: number }[] = [];
+
+    for (const n of flowNodes) {
+      if (!n || !n.id) continue;
+
+      const id = String(n.id);
+      const nowDragging = !!n.dragging;
+      const wasDragging = prevDragging.get(id) ?? false;
+
+      // commit only on transition: dragging true -> false
+      if (wasDragging && !nowDragging) {
+        const x = Number(n.position?.x ?? 0);
+        const y = Number(n.position?.y ?? 0);
+        updates.push({ id, xPos: x, yPos: y });
+      }
+
+      prevDragging.set(id, nowDragging);
+    }
+
+    if (updates.length === 1) {
+      const u = updates[0];
+      updateNodePosition(u.id, u.xPos, u.yPos);
+    } else if (updates.length > 1) {
+      updateNodePositions(updates);
+    }
+  }
+
+  // Extra safety: if your version dispatches drag-stop events reliably, persist there too.
+  function handleNodeDragStop(event: CustomEvent) {
+    const detail: any = event.detail;
+    const node: any = detail?.node;
+    if (!node) return;
+
+    const id = String(node.id);
+    const x = Number(node.position?.x ?? 0);
+    const y = Number(node.position?.y ?? 0);
+
+    updateNodePosition(id, x, y);
+  }
+
+  function handleSelectionDragStop(event: CustomEvent) {
+    const detail: any = event.detail;
+    const nodes: any[] = Array.isArray(detail?.nodes) ? detail.nodes : [];
+
+    if (nodes.length === 0) return;
+
+    updateNodePositions(
+      nodes.map((n: any) => ({
+        id: String(n.id),
+        xPos: Number(n.position?.x ?? 0),
+        yPos: Number(n.position?.y ?? 0)
+      }))
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tools: router placement
+  // ---------------------------------------------------------------------------
 
   $: mode = $placementMode;
-
-  // ---------------- Router placement ----------------
 
   let isPlacing = false;
   let previewX = 0;
@@ -105,7 +203,9 @@
   function handlePointerUp(event: PointerEvent) {
     if (!isPlacing) return;
 
+    // Convert screen coords to flow coords (fixes offset)
     const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+
     addNode(flowPos.x, flowPos.y);
 
     isPlacing = false;
@@ -118,48 +218,6 @@
       // ignore
     }
   }
-
-  // ---------------- Persist node movement into topology ----------------
-
-  function handleNodesChange(event: CustomEvent) {
-    const changes: any[] = Array.isArray(event.detail) ? event.detail : [];
-    if (changes.length === 0) return;
-
-    const updates: { id: string; xPos: number; yPos: number }[] = [];
-
-    for (const c of changes) {
-      if (!c || c.type !== 'position') continue;
-      if (c.dragging !== false) continue; // only commit final position
-      if (!c.position) continue;
-
-      updates.push({
-        id: String(c.id),
-        xPos: Number(c.position.x ?? 0),
-        yPos: Number(c.position.y ?? 0)
-      });
-    }
-
-    if (updates.length === 1) {
-      const u = updates[0];
-      updateNodePosition(u.id, u.xPos, u.yPos);
-      return;
-    }
-
-    if (updates.length > 1) {
-      updateNodePositions(updates);
-    }
-  }
-
-  function handleNodeDragStop(event: CustomEvent) {
-    const detail: any = event.detail;
-    const node: any = detail?.node;
-    if (!node) return;
-
-    const x = Number(node.position?.x ?? 0);
-    const y = Number(node.position?.y ?? 0);
-
-    updateNodePosition(String(node.id), x, y);
-  }
 </script>
 
 <div
@@ -169,16 +227,14 @@
   on:pointerup={handlePointerUp}
 >
   <SvelteFlow
-    {nodes}
-    {edges}
+    bind:nodes={flowNodes}
+    bind:edges={flowEdges}
     {nodeTypes}
     {proOptions}
     nodeOrigin={[0.5, 0.5]}
     fitView
-    on:nodeschange={handleNodesChange}
-    on:nodesChange={handleNodesChange}
     on:nodedragstop={handleNodeDragStop}
-    on:nodeDragStop={handleNodeDragStop}
+    on:selectiondragstop={handleSelectionDragStop}
   >
     <Background />
   </SvelteFlow>
