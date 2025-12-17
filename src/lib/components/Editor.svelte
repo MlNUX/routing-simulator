@@ -15,7 +15,8 @@
     clearPlacementMode,
     linkSourceRouterId,
     updateNodePosition,
-    updateNodePositions
+    updateNodePositions,
+    deleteLinkById
   } from '$lib/stores/simulation';
 
   const { screenToFlowPosition } = useSvelteFlow();
@@ -26,35 +27,34 @@
     router: RouterNode
   };
 
-  // SimulationController instance from store
   $: controller = $simulation as any;
 
-  // Prefer getter if present
   $: topology =
     typeof controller.getTopology === 'function'
       ? controller.getTopology()
       : controller.topology;
 
-  // ---------------------------------------------------------------------------
-  // IMPORTANT: Use bind:nodes / bind:edges so XYFlow updates flowNodes on drag
-  // ---------------------------------------------------------------------------
-
   let flowNodes: any[] = [];
   let flowEdges: any[] = [];
 
-  // Keep last known flow positions without creating extra reactive dependencies
   const lastFlowPositions = new Map<string, { x: number; y: number }>();
   const prevDragging = new Map<string, boolean>();
 
+  // IMPORTANT: if the topology object is replaced (JSON import),
+  // clear cached UI positions so imported xPos/yPos take effect.
+  let lastTopologyRef: any = null;
+  $: if (topology && topology !== lastTopologyRef) {
+    lastFlowPositions.clear();
+    prevDragging.clear();
+    lastTopologyRef = topology;
+  }
+
   function topologyNodesArray(topo: any): any[] {
     if (!topo || !topo.nodes) return [];
-
     const rawNodes = topo.nodes;
-    if (Array.isArray(rawNodes)) return rawNodes;
 
-    if (rawNodes instanceof Map) {
-      return Array.from(rawNodes.values());
-    }
+    if (Array.isArray(rawNodes)) return rawNodes;
+    if (rawNodes instanceof Map) return Array.from(rawNodes.values());
 
     return [];
   }
@@ -62,11 +62,15 @@
   function buildFlowNodesFromTopology(topo: any): any[] {
     const arr = topologyNodesArray(topo);
 
+    const ids = new Set<string>();
+    for (const n of arr) ids.add(String(n.id));
+    for (const k of lastFlowPositions.keys()) {
+      if (!ids.has(k)) lastFlowPositions.delete(k);
+    }
+
     return arr.map((node: any) => {
       const id = String(node.id);
 
-      // Prefer lastFlowPositions (what the user sees / dragged to),
-      // otherwise fall back to topology xPos/yPos
       const pos = lastFlowPositions.get(id);
       const x = pos ? pos.x : (node.xPos ?? 0);
       const y = pos ? pos.y : (node.yPos ?? 0);
@@ -94,23 +98,23 @@
     }));
   }
 
-  // Whenever topology changes (due to store updates), rebuild flow nodes/edges.
-  // NOTE: we do NOT read flowNodes here (so we don't rerun on every drag tick).
   $: if (topology) {
     flowEdges = buildFlowEdgesFromTopology(topology);
     flowNodes = buildFlowNodesFromTopology(topology);
   }
 
-  // Track live positions as the user drags (this block reruns on drag ticks).
+  // Track positions during drag
   $: {
     for (const n of flowNodes) {
       if (!n || !n.id || !n.position) continue;
-      lastFlowPositions.set(String(n.id), { x: Number(n.position.x ?? 0), y: Number(n.position.y ?? 0) });
+      lastFlowPositions.set(String(n.id), {
+        x: Number(n.position.x ?? 0),
+        y: Number(n.position.y ?? 0)
+      });
     }
   }
 
-  // Persist into SimulationController when a drag ends.
-  // This avoids spamming history during dragging.
+  // Commit positions when dragging stops
   $: {
     const updates: { id: string; xPos: number; yPos: number }[] = [];
 
@@ -121,11 +125,12 @@
       const nowDragging = !!n.dragging;
       const wasDragging = prevDragging.get(id) ?? false;
 
-      // commit only on transition: dragging true -> false
       if (wasDragging && !nowDragging) {
-        const x = Number(n.position?.x ?? 0);
-        const y = Number(n.position?.y ?? 0);
-        updates.push({ id, xPos: x, yPos: y });
+        updates.push({
+          id,
+          xPos: Number(n.position?.x ?? 0),
+          yPos: Number(n.position?.y ?? 0)
+        });
       }
 
       prevDragging.set(id, nowDragging);
@@ -139,23 +144,21 @@
     }
   }
 
-  // Extra safety: if your version dispatches drag-stop events reliably, persist there too.
   function handleNodeDragStop(event: CustomEvent) {
     const detail: any = event.detail;
     const node: any = detail?.node;
     if (!node) return;
 
-    const id = String(node.id);
-    const x = Number(node.position?.x ?? 0);
-    const y = Number(node.position?.y ?? 0);
-
-    updateNodePosition(id, x, y);
+    updateNodePosition(
+      String(node.id),
+      Number(node.position?.x ?? 0),
+      Number(node.position?.y ?? 0)
+    );
   }
 
   function handleSelectionDragStop(event: CustomEvent) {
     const detail: any = event.detail;
     const nodes: any[] = Array.isArray(detail?.nodes) ? detail.nodes : [];
-
     if (nodes.length === 0) return;
 
     updateNodePositions(
@@ -167,12 +170,24 @@
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Tools: router placement
-  // ---------------------------------------------------------------------------
-
   $: mode = $placementMode;
 
+  function handleEdgeClick(payload: any) {
+    if (mode !== 'delete') return;
+
+    const edge =
+      payload?.detail?.edge ??
+      payload?.edge ??
+      payload?.detail ??
+      payload;
+
+    const edgeId = edge?.id ? String(edge.id) : '';
+    if (!edgeId) return;
+
+    deleteLinkById(edgeId);
+  }
+
+  // Router placement
   let isPlacing = false;
   let previewX = 0;
   let previewY = 0;
@@ -203,9 +218,7 @@
   function handlePointerUp(event: PointerEvent) {
     if (!isPlacing) return;
 
-    // Convert screen coords to flow coords (fixes offset)
     const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-
     addNode(flowPos.x, flowPos.y);
 
     isPlacing = false;
@@ -233,8 +246,11 @@
     {proOptions}
     nodeOrigin={[0.5, 0.5]}
     fitView
+    defaultEdgeOptions={{ selectable: true, interactionWidth: 32 }}
     on:nodedragstop={handleNodeDragStop}
     on:selectiondragstop={handleSelectionDragStop}
+    on:edgeclick={handleEdgeClick}
+    onedgeclick={handleEdgeClick}
   >
     <Background />
   </SvelteFlow>
@@ -246,6 +262,12 @@
       {:else}
         Link tool: select the first router.
       {/if}
+    </div>
+  {/if}
+
+  {#if mode === 'delete'}
+    <div class="tool-hint">
+      Delete tool: click a router or a link to delete it.
     </div>
   {/if}
 

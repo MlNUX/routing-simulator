@@ -1,9 +1,13 @@
 <script>
   import '../app.css';
   import '@xyflow/svelte/dist/style.css';
+
+  import { SvelteFlowProvider } from '@xyflow/svelte';
 </script>
 
-<div class="app-root">
-  <slot />
-</div>
+<SvelteFlowProvider>
+  <div class="app-root">
+    <slot />
+  </div>
+</SvelteFlowProvider>
 

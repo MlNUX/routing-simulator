@@ -12,6 +12,33 @@ import { Link } from './Link';
 import { RoutingTable } from './RoutingTable';
 
 // ---------------------------------------------------------------------------
+// UI Zoom (scales UI chrome, not the canvas)
+// ---------------------------------------------------------------------------
+
+export const uiScale = writable<number>(1);
+
+const UI_SCALE_MIN = 0.6;
+const UI_SCALE_MAX = 1.6;
+const UI_SCALE_STEP = 0.1;
+
+function clampUiScale(v: number): number {
+  const clamped = Math.max(UI_SCALE_MIN, Math.min(UI_SCALE_MAX, v));
+  return Number(clamped.toFixed(2));
+}
+
+export function zoomInUI(): void {
+  uiScale.update((s) => clampUiScale(s + UI_SCALE_STEP));
+}
+
+export function zoomOutUI(): void {
+  uiScale.update((s) => clampUiScale(s - UI_SCALE_STEP));
+}
+
+export function resetUIZoom(): void {
+  uiScale.set(1);
+}
+
+// ---------------------------------------------------------------------------
 // Sample topology for testing (3 routers in a line: R1 - R2 - R3)
 // ---------------------------------------------------------------------------
 
@@ -41,7 +68,6 @@ function createSampleTopology(): Topology {
   const l1 = new Link('L1', r1, r2, 1);
   const l2 = new Link('L2', r2, r3, 1);
 
-  // IMPORTANT: initialize neighbors for algorithms
   r1.neighbors.push(l1);
   r2.neighbors.push(l1);
 
@@ -54,24 +80,25 @@ function createSampleTopology(): Topology {
 }
 
 // ---------------------------------------------------------------------------
-// Main simulation store: single SimulationController instance
+// Main simulation store
 // ---------------------------------------------------------------------------
 
 export const simulation = writable(new SimulationController(createSampleTopology()));
 
 // ---------------------------------------------------------------------------
-// Router selection state
+// Router selection
 // ---------------------------------------------------------------------------
 
 export const selectedRouterId = writable<string | null>(null);
 
 // ---------------------------------------------------------------------------
-// Placement / tool mode
+// Tool mode
 // ---------------------------------------------------------------------------
 
-export type PlacementMode = 'none' | 'router' | 'link';
+export type PlacementMode = 'none' | 'router' | 'link' | 'delete';
 export const placementMode = writable<PlacementMode>('none');
 
+// Link tool state
 export const linkSourceRouterId = writable<string | null>(null);
 export const linkTargetRouterId = writable<string | null>(null);
 export const linkWeight = writable<number>(1);
@@ -89,9 +116,7 @@ export function clearLinkSelection(): void {
 export function toggleRouterPlacement(): void {
   placementMode.update((m) => {
     const next = m === 'router' ? 'none' : 'router';
-    if (next !== 'link') {
-      clearLinkSelection();
-    }
+    clearLinkSelection();
     return next;
   });
 }
@@ -99,9 +124,15 @@ export function toggleRouterPlacement(): void {
 export function toggleLinkPlacement(): void {
   placementMode.update((m) => {
     const next = m === 'link' ? 'none' : 'link';
-    if (next === 'link') {
-      clearLinkSelection();
-    }
+    clearLinkSelection();
+    return next;
+  });
+}
+
+export function toggleDeletePlacement(): void {
+  placementMode.update((m) => {
+    const next = m === 'delete' ? 'none' : 'delete';
+    clearLinkSelection();
     return next;
   });
 }
@@ -112,7 +143,7 @@ export function clearPlacementMode(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Selection behavior
+// Selection behavior (normal + link/delete tools)
 // ---------------------------------------------------------------------------
 
 export function setSelectedRouter(id: string | null): void {
@@ -122,7 +153,15 @@ export function setSelectedRouter(id: string | null): void {
     return;
   }
 
-  if (get(placementMode) !== 'link') {
+  const mode = get(placementMode);
+
+  if (mode === 'delete') {
+    deleteNode(id);
+    selectedRouterId.set(null);
+    return;
+  }
+
+  if (mode !== 'link') {
     return;
   }
 
@@ -155,7 +194,7 @@ export function setSelectedRouter(id: string | null): void {
 }
 
 // ---------------------------------------------------------------------------
-// Control of the simulation (playback etc.)
+// Simulation controls
 // ---------------------------------------------------------------------------
 
 export function play(): void {
@@ -255,7 +294,31 @@ export function deleteLink(sourceId: string, targetId: string): void {
   });
 }
 
-// ------------------------------ NEW: movement -------------------------------
+export function deleteLinkById(linkId: string): void {
+  simulation.update((controller) => {
+    controller.deleteLinkById(linkId);
+    return controller;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Clear network
+// ---------------------------------------------------------------------------
+
+export function clearNetwork(): void {
+  selectedRouterId.set(null);
+  placementMode.set('none');
+  clearLinkSelection();
+
+  simulation.update((controller) => {
+    controller.clearNetwork();
+    return controller;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Movement (used by Editor.svelte)
+// ---------------------------------------------------------------------------
 
 export function updateNodePosition(nodeId: string, xPos: number, yPos: number): void {
   simulation.update((controller) => {
@@ -311,6 +374,10 @@ export function getPath(sourceId: string, targetId: string): string[] {
 // ---------------------------------------------------------------------------
 
 export function importJson(json: string): void {
+  selectedRouterId.set(null);
+  placementMode.set('none');
+  clearLinkSelection();
+
   simulation.update((controller) => {
     controller.importJson(json);
     return controller;

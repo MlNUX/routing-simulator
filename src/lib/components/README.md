@@ -23,4 +23,3 @@
 })();
 
 
-## Debbuging code to actaull print out if new router are printed

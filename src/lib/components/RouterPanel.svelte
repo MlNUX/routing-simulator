@@ -4,16 +4,20 @@
     placementMode,
     toggleRouterPlacement,
     toggleLinkPlacement,
+    toggleDeletePlacement,
     linkWeight,
-    setLinkWeight
+    setLinkWeight,
+    clearNetwork,
+    zoomInUI,
+    zoomOutUI
   } from '$lib/stores/simulation';
 
   $: currentMode = $placementMode;
   $: weightValue = $linkWeight;
 
   async function handleClearNetwork() {
-    console.log('Clear network (dummy)');
-    await notify('Clear network (dummy)');
+    clearNetwork();
+    await notify('Network cleared');
   }
 
   async function handleSendPacket() {
@@ -22,15 +26,11 @@
   }
 
   function handleZoomIn() {
-    console.log('Zoom in (dummy)');
+    zoomInUI();
   }
 
   function handleZoomOut() {
-    console.log('Zoom out (dummy)');
-  }
-
-  function handleDeleteSelection() {
-    console.log('Delete selection (dummy)');
+    zoomOutUI();
   }
 
   function handleRouterClick() {
@@ -41,6 +41,10 @@
     toggleLinkPlacement();
   }
 
+  function handleDeleteClick() {
+    toggleDeletePlacement();
+  }
+
   function handleWeightInput(event: Event) {
     const el = event.currentTarget as HTMLInputElement;
     const parsed = Number(el.value);
@@ -48,7 +52,10 @@
   }
 </script>
 
-<aside class="left-panel">
+<aside
+  class="left-panel"
+  style="transform: scale(var(--uiScale, 1)); transform-origin: top left;"
+>
   <button class="btn-small-primary" on:click={handleClearNetwork}>
     Clear network
   </button>
@@ -65,7 +72,6 @@
     <div class="palette-title">Tools</div>
 
     <div class="palette-list">
-      <!-- Router placement -->
       <div
         class={`palette-item ${
           currentMode === 'router' ? 'palette-item--active' : ''
@@ -78,7 +84,6 @@
         </div>
       </div>
 
-      <!-- Link creation -->
       <div
         class={`palette-item ${
           currentMode === 'link' ? 'palette-item--active' : ''
@@ -110,6 +115,27 @@
           </div>
         </div>
       {/if}
+
+      <div
+        class={`palette-item ${
+          currentMode === 'delete' ? 'palette-item--active' : ''
+        }`}
+        style="margin-top: 6px;"
+        on:click={handleDeleteClick}
+      >
+        <div class="palette-icon" style="display:flex;align-items:center;justify-content:center;">
+          🗑
+        </div>
+        <div class="palette-label">
+          {currentMode === 'delete' ? 'Deleting…' : 'Delete'}
+        </div>
+      </div>
+
+      {#if currentMode === 'delete'}
+        <div style="margin-top: 6px; font-size: 11px; opacity: 0.75;">
+          Click a router or a link to delete it.
+        </div>
+      {/if}
     </div>
   </div>
 
@@ -122,9 +148,6 @@
         🔍+
       </button>
     </div>
-    <button class="trash-btn" title="Delete" on:click={handleDeleteSelection}>
-      🗑
-    </button>
   </div>
 </aside>
 

@@ -13,7 +13,6 @@ import { LinkStateStrategy } from "./LinkStateStrategy";
 import { DistanceVectorStrategy } from "./DistanceVectorStrategy";
 
 export class SimulationController {
-  // made public so Svelte can bind directly (Timeline, Editor, etc.)
   public currentStepIndex: number;
   public history: SimulationState[];
   public topology: Topology;
@@ -35,7 +34,6 @@ export class SimulationController {
     this.pushState();
   }
 
-  // convenience getters for UI
   public get running(): boolean {
     return this.playing;
   }
@@ -56,7 +54,6 @@ export class SimulationController {
       step = 0;
     }
 
-    // only simulate forward if needed
     while (this.currentStepIndex < step) {
       this.nextStep();
       if (this.currentStepIndex === step) {
@@ -140,10 +137,8 @@ export class SimulationController {
         break;
       }
       case EventType.NODE_ADDITION:
-        // not clearly specified -> no-op for now
         break;
       case EventType.LINK_ADDITION:
-        // not clearly specified -> no-op for now
         break;
       default:
         break;
@@ -238,7 +233,39 @@ export class SimulationController {
     this.pushState();
   }
 
-  // -------------------------- NEW: Persist node movement ---------------------
+  public deleteLinkById(linkId: string): void {
+    const link = this.topology.links.find((l) => l.id === linkId);
+    if (!link) {
+      return;
+    }
+
+    this.removeLinkInstance(link);
+    this.pushState();
+  }
+
+  // -------------------------- Clear everything --------------------------
+
+  public clearNetwork(): void {
+    const linksCopy = [...this.topology.links];
+    for (const link of linksCopy) {
+      this.removeLinkInstance(link);
+    }
+
+    this.topology.links = [];
+    this.topology.nodes.clear();
+
+    this.events = new MinHeap<SimulationEvent>((a, b) => a.step - b.step);
+    this.nodeEventMap = new Map<string, SimulationEvent[]>();
+    this.linkEventMap = new Map<string, SimulationEvent[]>();
+
+    this.currentStepIndex = 0;
+    this.history = [];
+    this.playing = false;
+
+    this.pushState();
+  }
+
+  // -------------------------- Persist node movement --------------------------
 
   public moveNode(nodeId: string, xPos: number, yPos: number): void {
     const node = this.topology.nodes.get(nodeId);
@@ -250,7 +277,6 @@ export class SimulationController {
       return;
     }
 
-    // Avoid pushing duplicate states (also avoids double-events from multiple listeners)
     if (node.xPos === xPos && node.yPos === yPos) {
       return;
     }
@@ -286,7 +312,6 @@ export class SimulationController {
   public nextStep(): void {
     this.currentStepIndex++;
 
-    // handle all events scheduled for this step
     while (true) {
       const peek = this.events.peek();
       if (!peek || peek.step > this.currentStepIndex) {
@@ -298,7 +323,6 @@ export class SimulationController {
       }
     }
 
-    // execute routing strategy for all routers
     for (const node of this.topology.nodes.values()) {
       if (node instanceof Router && node.strategy) {
         node.strategy.executeStep(node, this.topology);
@@ -332,7 +356,6 @@ export class SimulationController {
     let targetRouter: Router | null = null;
     const path: string[] = [];
 
-    // start
     if (sourceNode instanceof Router) {
       startRouter = sourceNode;
       path.push(sourceNode.id);
@@ -345,7 +368,6 @@ export class SimulationController {
       return [];
     }
 
-    // target
     let appendTargetDevice = false;
     if (targetNode instanceof Router) {
       targetRouter = targetNode;
@@ -420,6 +442,7 @@ export class SimulationController {
 
     const newTopology = new Topology();
 
+    // Nodes
     if (Array.isArray(data.nodes)) {
       for (const raw of data.nodes) {
         if (!raw || typeof raw.id !== "string") {
@@ -441,10 +464,29 @@ export class SimulationController {
       }
     }
 
+    // Links (ensure every link has a non-empty unique id)
+    let linkIndex = 1;
+    const nextLinkId = (): string => {
+      while (newTopology.links.some((l) => l.id === `L${linkIndex}`)) {
+        linkIndex++;
+      }
+      const id = `L${linkIndex}`;
+      linkIndex++;
+      return id;
+    };
+
     if (Array.isArray(data.links)) {
       for (const raw of data.links) {
         if (!raw) continue;
-        const id: string = raw.id ?? "";
+
+        const rawId: unknown = raw.id;
+        let id: string =
+          typeof rawId === "string" && rawId.trim().length > 0 ? rawId.trim() : "";
+
+        if (id === "" || newTopology.links.some((l) => l.id === id)) {
+          id = nextLinkId();
+        }
+
         const sourceId: string = raw.sourceId;
         const targetId: string = raw.targetId;
         const weight: number = typeof raw.weight === "number" ? raw.weight : 1;
@@ -462,6 +504,7 @@ export class SimulationController {
 
     this.topology = newTopology;
 
+    // Events
     this.events = new MinHeap<SimulationEvent>((a, b) => a.step - b.step);
     this.nodeEventMap = new Map<string, SimulationEvent[]>();
     this.linkEventMap = new Map<string, SimulationEvent[]>();

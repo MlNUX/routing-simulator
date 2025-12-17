@@ -48,7 +48,10 @@
   $: routingEntries = selectedRouter ? extractRoutingEntries(selectedRouter) : [];
 </script>
 
-<div class="router-table-panel">
+<div
+  class="router-table-panel"
+  style="transform: scale(var(--uiScale, 1)); transform-origin: top right;"
+>
   {#if selectedId}
     <h3>Routing table: {selectedId}</h3>
     {#if routingEntries.length === 0}
@@ -83,7 +86,7 @@
     position: absolute;
     top: 80px;
     right: 24px;
-    bottom: 120px; /* leave space for bottom bar */
+    bottom: 120px;
     padding: 10px 12px;
     border-radius: 12px;
     background: rgba(223, 243, 255, 0.96);

@@ -4,7 +4,6 @@
   $: controller = $simulation as any;
   $: sim = controller.simulation ?? controller;
 
-  // you can expose these however you like on SimulationController
   $: routingPackets = sim.routingPackets ?? [];
   $: testPackets =
     sim.testPackets ??
@@ -12,7 +11,10 @@
 </script>
 
 {#if routingPackets.length > 0 || testPackets.length > 0}
-  <div class="packets-panel">
+  <div
+    class="packets-panel"
+    style="transform: scale(var(--uiScale, 1)); transform-origin: top left;"
+  >
     {#if routingPackets.length > 0}
       <div class="packets-section">
         <h3>Routing packets</h3>
