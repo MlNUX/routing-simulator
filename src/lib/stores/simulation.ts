@@ -39,7 +39,40 @@ export function resetUIZoom(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Sample topology for testing (3 routers in a line: R1 - R2 - R3)
+// Warnings (shown in toolbar)
+// ---------------------------------------------------------------------------
+
+export const warningMessage = writable<string | null>(null);
+
+function clearWarning(): void {
+  warningMessage.set(null);
+}
+
+function validateTopologyForRun(controller: SimulationController): string | null {
+  const nodeCount = controller.topology.nodes.size;
+  const linkCount = controller.topology.links.length;
+
+  if (nodeCount < 2) {
+    return 'Need at least 2 routers before running the simulation.';
+  }
+  if (linkCount < 1) {
+    return 'Need at least 1 link before running the simulation.';
+  }
+
+  for (const l of controller.topology.links) {
+    if (!l || typeof l.id !== 'string' || l.id.length === 0) {
+      return 'Invalid link detected (missing id).';
+    }
+    if (!Number.isFinite(l.weight) || l.weight <= 0) {
+      return `Invalid weight on link ${l.id} (must be > 0).`;
+    }
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Sample topology
 // ---------------------------------------------------------------------------
 
 function createSampleTopology(): Topology {
@@ -86,10 +119,15 @@ function createSampleTopology(): Topology {
 export const simulation = writable(new SimulationController(createSampleTopology()));
 
 // ---------------------------------------------------------------------------
-// Router selection
+// Selection (router + edge)
 // ---------------------------------------------------------------------------
 
 export const selectedRouterId = writable<string | null>(null);
+export const selectedEdgeId = writable<string | null>(null);
+
+export function setSelectedEdge(id: string | null): void {
+  selectedEdgeId.set(id);
+}
 
 // ---------------------------------------------------------------------------
 // Tool mode
@@ -114,6 +152,12 @@ export function clearLinkSelection(): void {
 }
 
 export function toggleRouterPlacement(): void {
+  const controller = get(simulation);
+  if (controller.running) {
+    warningMessage.set('Pause simulation before editing the topology.');
+    return;
+  }
+
   placementMode.update((m) => {
     const next = m === 'router' ? 'none' : 'router';
     clearLinkSelection();
@@ -122,6 +166,12 @@ export function toggleRouterPlacement(): void {
 }
 
 export function toggleLinkPlacement(): void {
+  const controller = get(simulation);
+  if (controller.running) {
+    warningMessage.set('Pause simulation before editing the topology.');
+    return;
+  }
+
   placementMode.update((m) => {
     const next = m === 'link' ? 'none' : 'link';
     clearLinkSelection();
@@ -130,6 +180,12 @@ export function toggleLinkPlacement(): void {
 }
 
 export function toggleDeletePlacement(): void {
+  const controller = get(simulation);
+  if (controller.running) {
+    warningMessage.set('Pause simulation before editing the topology.');
+    return;
+  }
+
   placementMode.update((m) => {
     const next = m === 'delete' ? 'none' : 'delete';
     clearLinkSelection();
@@ -153,7 +209,13 @@ export function setSelectedRouter(id: string | null): void {
     return;
   }
 
+  const controller = get(simulation);
   const mode = get(placementMode);
+
+  if (controller.running) {
+    warningMessage.set('Pause simulation before editing the topology.');
+    return;
+  }
 
   if (mode === 'delete') {
     deleteNode(id);
@@ -165,7 +227,6 @@ export function setSelectedRouter(id: string | null): void {
     return;
   }
 
-  const controller = get(simulation);
   const node = controller.topology.nodes.get(id);
   if (!(node instanceof Router)) {
     return;
@@ -198,13 +259,23 @@ export function setSelectedRouter(id: string | null): void {
 // ---------------------------------------------------------------------------
 
 export function play(): void {
-  simulation.update((controller) => {
-    controller.play();
-    return controller;
+  const controller = get(simulation);
+  const msg = validateTopologyForRun(controller);
+  if (msg) {
+    warningMessage.set(msg);
+    return;
+  }
+
+  clearWarning();
+
+  simulation.update((c) => {
+    c.play();
+    return c;
   });
 }
 
 export function pause(): void {
+  clearWarning();
   simulation.update((controller) => {
     controller.pause();
     return controller;
@@ -212,6 +283,7 @@ export function pause(): void {
 }
 
 export function setAlgorithm(algo: AlgorithmType): void {
+  clearWarning();
   simulation.update((controller) => {
     controller.setAlgorithm(algo);
     return controller;
@@ -228,9 +300,18 @@ export function jumpToStep(step: number): SimulationState {
 }
 
 export function nextStep(): void {
-  simulation.update((controller) => {
-    controller.nextStep();
-    return controller;
+  const controller = get(simulation);
+  const msg = validateTopologyForRun(controller);
+  if (msg) {
+    warningMessage.set(msg);
+    return;
+  }
+
+  clearWarning();
+
+  simulation.update((c) => {
+    c.nextStep();
+    return c;
   });
 }
 
@@ -239,6 +320,7 @@ export function stepForward(): void {
 }
 
 export function stepBackward(): void {
+  clearWarning();
   simulation.update((controller) => {
     const anyCtrl = controller as any;
     const current: number = anyCtrl.currentStepIndex ?? 0;
@@ -249,6 +331,7 @@ export function stepBackward(): void {
 }
 
 export function stop(): void {
+  clearWarning();
   simulation.update((controller) => {
     controller.jumpToStep(0);
     return controller;
@@ -256,6 +339,7 @@ export function stop(): void {
 }
 
 export function reset(): void {
+  clearWarning();
   simulation.update((controller) => {
     const topo = controller.getTopology();
     return new SimulationController(topo);
@@ -267,6 +351,7 @@ export function reset(): void {
 // ---------------------------------------------------------------------------
 
 export function addNode(xPos: number, yPos: number): void {
+  clearWarning();
   simulation.update((controller) => {
     controller.addNode(xPos, yPos);
     return controller;
@@ -274,6 +359,7 @@ export function addNode(xPos: number, yPos: number): void {
 }
 
 export function addLink(sourceId: string, targetId: string, weight: number): void {
+  clearWarning();
   simulation.update((controller) => {
     controller.addLink(sourceId, targetId, weight);
     return controller;
@@ -281,6 +367,7 @@ export function addLink(sourceId: string, targetId: string, weight: number): voi
 }
 
 export function deleteNode(nodeId: string): void {
+  clearWarning();
   simulation.update((controller) => {
     controller.deleteNode(nodeId);
     return controller;
@@ -288,6 +375,7 @@ export function deleteNode(nodeId: string): void {
 }
 
 export function deleteLink(sourceId: string, targetId: string): void {
+  clearWarning();
   simulation.update((controller) => {
     controller.deleteLink(sourceId, targetId);
     return controller;
@@ -295,8 +383,50 @@ export function deleteLink(sourceId: string, targetId: string): void {
 }
 
 export function deleteLinkById(linkId: string): void {
+  clearWarning();
   simulation.update((controller) => {
     controller.deleteLinkById(linkId);
+    return controller;
+  });
+}
+
+export function updateLinkWeight(linkId: string, newWeight: number): void {
+  clearWarning();
+  simulation.update((controller) => {
+    controller.updateLinkWeight(linkId, newWeight);
+    return controller;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Router editing (name + routing table)
+// ---------------------------------------------------------------------------
+
+export function updateNodeName(nodeId: string, newName: string): void {
+  clearWarning();
+  simulation.update((controller) => {
+    controller.updateNodeName(nodeId, newName);
+    return controller;
+  });
+}
+
+export function upsertRoutingEntry(
+  routerId: string,
+  destinationId: string,
+  nextHopId: string,
+  cost: number
+): void {
+  clearWarning();
+  simulation.update((controller) => {
+    controller.upsertRoutingEntry(routerId, destinationId, nextHopId, cost);
+    return controller;
+  });
+}
+
+export function deleteRoutingEntry(routerId: string, destinationId: string): void {
+  clearWarning();
+  simulation.update((controller) => {
+    controller.deleteRoutingEntry(routerId, destinationId);
     return controller;
   });
 }
@@ -306,7 +436,9 @@ export function deleteLinkById(linkId: string): void {
 // ---------------------------------------------------------------------------
 
 export function clearNetwork(): void {
+  clearWarning();
   selectedRouterId.set(null);
+  selectedEdgeId.set(null);
   placementMode.set('none');
   clearLinkSelection();
 
@@ -317,10 +449,36 @@ export function clearNetwork(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Delete selected (keyboard helper)
+// ---------------------------------------------------------------------------
+
+export function deleteSelection(): void {
+  const controller = get(simulation);
+  if (controller.running) {
+    warningMessage.set('Pause simulation before editing the topology.');
+    return;
+  }
+
+  const nodeId = get(selectedRouterId);
+  if (nodeId) {
+    deleteNode(nodeId);
+    selectedRouterId.set(null);
+    return;
+  }
+
+  const edgeId = get(selectedEdgeId);
+  if (edgeId) {
+    deleteLinkById(edgeId);
+    selectedEdgeId.set(null);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Movement (used by Editor.svelte)
 // ---------------------------------------------------------------------------
 
 export function updateNodePosition(nodeId: string, xPos: number, yPos: number): void {
+  clearWarning();
   simulation.update((controller) => {
     controller.moveNode(nodeId, xPos, yPos);
     return controller;
@@ -330,6 +488,7 @@ export function updateNodePosition(nodeId: string, xPos: number, yPos: number): 
 export function updateNodePositions(
   updates: { id: string; xPos: number; yPos: number }[]
 ): void {
+  clearWarning();
   simulation.update((controller) => {
     controller.moveNodes(updates);
     return controller;
@@ -341,6 +500,7 @@ export function updateNodePositions(
 // ---------------------------------------------------------------------------
 
 export function addEvent(event: SimulationEvent): void {
+  clearWarning();
   simulation.update((controller) => {
     controller.addEvent(event);
     return controller;
@@ -360,21 +520,14 @@ export function getTopology(): Topology {
   return topology;
 }
 
-export function getPath(sourceId: string, targetId: string): string[] {
-  let path: string[] = [];
-  simulation.update((controller) => {
-    path = controller.getPath(sourceId, targetId);
-    return controller;
-  });
-  return path;
-}
-
 // ---------------------------------------------------------------------------
 // Import / Export
 // ---------------------------------------------------------------------------
 
 export function importJson(json: string): void {
+  clearWarning();
   selectedRouterId.set(null);
+  selectedEdgeId.set(null);
   placementMode.set('none');
   clearLinkSelection();
 

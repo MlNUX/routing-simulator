@@ -1,6 +1,7 @@
 <script lang="ts">
   import { notify } from '$lib/notify';
   import {
+    simulation,
     placementMode,
     toggleRouterPlacement,
     toggleLinkPlacement,
@@ -12,10 +13,19 @@
     zoomOutUI
   } from '$lib/stores/simulation';
 
+  $: controller = $simulation as any;
+  $: isRunning = !!controller?.running;
+
   $: currentMode = $placementMode;
   $: weightValue = $linkWeight;
 
+  let showShortcuts = false;
+
   async function handleClearNetwork() {
+    if (isRunning) {
+      await notify('Pause simulation before clearing the network');
+      return;
+    }
     clearNetwork();
     await notify('Network cleared');
   }
@@ -23,6 +33,30 @@
   async function handleSendPacket() {
     console.log('Send packet (dummy)');
     await notify('Send packet (dummy)');
+  }
+
+  async function handleRouterClick() {
+    if (isRunning) {
+      await notify('Pause simulation before editing the topology');
+      return;
+    }
+    toggleRouterPlacement();
+  }
+
+  async function handleLinkClick() {
+    if (isRunning) {
+      await notify('Pause simulation before editing the topology');
+      return;
+    }
+    toggleLinkPlacement();
+  }
+
+  async function handleDeleteClick() {
+    if (isRunning) {
+      await notify('Pause simulation before editing the topology');
+      return;
+    }
+    toggleDeletePlacement();
   }
 
   function handleZoomIn() {
@@ -33,22 +67,18 @@
     zoomOutUI();
   }
 
-  function handleRouterClick() {
-    toggleRouterPlacement();
-  }
-
-  function handleLinkClick() {
-    toggleLinkPlacement();
-  }
-
-  function handleDeleteClick() {
-    toggleDeletePlacement();
-  }
-
   function handleWeightInput(event: Event) {
     const el = event.currentTarget as HTMLInputElement;
     const parsed = Number(el.value);
     setLinkWeight(parsed);
+  }
+
+  function toggleShortcuts() {
+    showShortcuts = !showShortcuts;
+  }
+
+  function closeShortcuts() {
+    showShortcuts = false;
   }
 </script>
 
@@ -56,7 +86,7 @@
   class="left-panel"
   style="transform: scale(var(--uiScale, 1)); transform-origin: top left;"
 >
-  <button class="btn-small-primary" on:click={handleClearNetwork}>
+  <button class="btn-small-primary" on:click={handleClearNetwork} disabled={isRunning}>
     Clear network
   </button>
 
@@ -68,6 +98,14 @@
     Send packet
   </button>
 
+  <button
+    class="btn-small-primary"
+    style="margin-top: 8px;"
+    on:click={toggleShortcuts}
+  >
+    Shortcuts
+  </button>
+
   <div style="margin-top: 16px;">
     <div class="palette-title">Tools</div>
 
@@ -75,7 +113,7 @@
       <div
         class={`palette-item ${
           currentMode === 'router' ? 'palette-item--active' : ''
-        }`}
+        } ${isRunning ? 'palette-item--disabled' : ''}`}
         on:click={handleRouterClick}
       >
         <div class="palette-icon palette-icon--router"></div>
@@ -87,7 +125,7 @@
       <div
         class={`palette-item ${
           currentMode === 'link' ? 'palette-item--active' : ''
-        }`}
+        } ${isRunning ? 'palette-item--disabled' : ''}`}
         style="margin-top: 6px;"
         on:click={handleLinkClick}
       >
@@ -107,6 +145,7 @@
             min="1"
             step="1"
             value={weightValue}
+            disabled={isRunning}
             on:input={handleWeightInput}
             style="width: 100%; padding: 6px 8px; border-radius: 10px; border: 1px solid rgba(15,23,42,0.25);"
           />
@@ -119,7 +158,7 @@
       <div
         class={`palette-item ${
           currentMode === 'delete' ? 'palette-item--active' : ''
-        }`}
+        } ${isRunning ? 'palette-item--disabled' : ''}`}
         style="margin-top: 6px;"
         on:click={handleDeleteClick}
       >
@@ -136,18 +175,153 @@
           Click a router or a link to delete it.
         </div>
       {/if}
+
+      {#if isRunning}
+        <div style="margin-top: 10px; font-size: 11px; opacity: 0.75;">
+          Topology editing disabled while playing.
+        </div>
+      {/if}
     </div>
   </div>
 
   <div class="left-panel-footer">
     <div class="zoom-row">
-      <button class="zoom-btn" title="Zoom out" on:click={handleZoomOut}>
+      <button class="zoom-btn" title="Zoom out UI" on:click={handleZoomOut}>
         🔍-
       </button>
-      <button class="zoom-btn" title="Zoom in" on:click={handleZoomIn}>
+      <button class="zoom-btn" title="Zoom in UI" on:click={handleZoomIn}>
         🔍+
       </button>
     </div>
   </div>
+
+  {#if showShortcuts}
+    <div class="shortcuts-backdrop" on:click={closeShortcuts} />
+
+    <div class="shortcuts-modal">
+      <div class="shortcuts-header">
+        <div class="shortcuts-title">Keyboard shortcuts</div>
+        <button class="btn-icon" title="Close" on:click={closeShortcuts}>✖</button>
+      </div>
+
+      <table class="shortcuts-table">
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Space</code></td>
+            <td>Play / Pause</td>
+          </tr>
+          <tr>
+            <td><code>→</code></td>
+            <td>Step forward</td>
+          </tr>
+          <tr>
+            <td><code>←</code></td>
+            <td>Step backward</td>
+          </tr>
+          <tr>
+            <td><code>R</code></td>
+            <td>Toggle router placement tool</td>
+          </tr>
+          <tr>
+            <td><code>L</code></td>
+            <td>Toggle link tool</td>
+          </tr>
+          <tr>
+            <td><code>D</code></td>
+            <td>Toggle delete tool</td>
+          </tr>
+          <tr>
+            <td><code>Del</code> / <code>Backspace</code></td>
+            <td>Delete selection (and toggle delete tool)</td>
+          </tr>
+          <tr>
+            <td><code>Esc</code></td>
+            <td>Exit tool mode</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="shortcuts-footnote">
+        Note: deleting / editing is blocked while the simulation is playing.
+      </div>
+    </div>
+  {/if}
 </aside>
+
+<style>
+  .palette-item--disabled {
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  .shortcuts-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.35);
+    z-index: 80;
+  }
+
+  .shortcuts-modal {
+    position: fixed;
+    left: 24px;
+    top: 160px;
+    width: min(360px, calc(100vw - 48px));
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.25);
+    z-index: 90;
+    padding: 12px;
+  }
+
+  .shortcuts-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .shortcuts-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .shortcuts-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .shortcuts-table th,
+  .shortcuts-table td {
+    padding: 6px 6px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+  }
+
+  .shortcuts-table th {
+    font-weight: 700;
+  }
+
+  code {
+    background: rgba(15, 23, 42, 0.08);
+    padding: 2px 6px;
+    border-radius: 8px;
+  }
+
+  .shortcuts-footnote {
+    margin-top: 8px;
+    font-size: 11px;
+    opacity: 0.75;
+    color: #0f172a;
+  }
+</style>
 

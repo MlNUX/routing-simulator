@@ -1,0 +1,40 @@
+{
+  "nodes": [
+    {
+      "id": "R1",
+      "name": "R1",
+      "xPos": 170,
+      "yPos": 230,
+      "type": "router"
+    },
+    {
+      "id": "R2",
+      "name": "R2",
+      "xPos": 370,
+      "yPos": 230,
+      "type": "router"
+    },
+    {
+      "id": "R3",
+      "name": "R3",
+      "xPos": 570,
+      "yPos": 230,
+      "type": "router"
+    }
+  ],
+  "links": [
+    {
+      "id": "L1",
+      "sourceId": "R1",
+      "targetId": "R2",
+      "weight": 1
+    },
+    {
+      "id": "L2",
+      "sourceId": "R2",
+      "targetId": "R3",
+      "weight": 1
+    }
+  ],
+  "events": []
+}

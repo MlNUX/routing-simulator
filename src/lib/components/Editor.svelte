@@ -16,7 +16,9 @@
     linkSourceRouterId,
     updateNodePosition,
     updateNodePositions,
-    deleteLinkById
+    deleteLinkById,
+    selectedEdgeId,
+    setSelectedEdge
   } from '$lib/stores/simulation';
 
   const { screenToFlowPosition } = useSvelteFlow();
@@ -28,6 +30,7 @@
   };
 
   $: controller = $simulation as any;
+  $: isRunning = !!controller?.running;
 
   $: topology =
     typeof controller.getTopology === 'function'
@@ -40,8 +43,6 @@
   const lastFlowPositions = new Map<string, { x: number; y: number }>();
   const prevDragging = new Map<string, boolean>();
 
-  // IMPORTANT: if the topology object is replaced (JSON import),
-  // clear cached UI positions so imported xPos/yPos take effect.
   let lastTopologyRef: any = null;
   $: if (topology && topology !== lastTopologyRef) {
     lastFlowPositions.clear();
@@ -90,12 +91,18 @@
   function buildFlowEdgesFromTopology(topo: any): any[] {
     if (!topo || !topo.links) return [];
 
-    return topo.links.map((link: any) => ({
-      id: link.id,
-      source: link.source?.id,
-      target: link.target?.id,
-      label: String(link.weight ?? '')
-    }));
+    return topo.links.map((link: any) => {
+      const id = String(link.id);
+      const isSelected = $selectedEdgeId === id;
+
+      return {
+        id,
+        source: link.source?.id,
+        target: link.target?.id,
+        label: String(link.weight ?? ''),
+        class: isSelected ? 'edge-selected' : ''
+      };
+    });
   }
 
   $: if (topology) {
@@ -103,7 +110,6 @@
     flowNodes = buildFlowNodesFromTopology(topology);
   }
 
-  // Track positions during drag
   $: {
     for (const n of flowNodes) {
       if (!n || !n.id || !n.position) continue;
@@ -114,37 +120,42 @@
     }
   }
 
-  // Commit positions when dragging stops
   $: {
-    const updates: { id: string; xPos: number; yPos: number }[] = [];
+    if (isRunning) {
+      prevDragging.clear();
+    } else {
+      const updates: { id: string; xPos: number; yPos: number }[] = [];
 
-    for (const n of flowNodes) {
-      if (!n || !n.id) continue;
+      for (const n of flowNodes) {
+        if (!n || !n.id) continue;
 
-      const id = String(n.id);
-      const nowDragging = !!n.dragging;
-      const wasDragging = prevDragging.get(id) ?? false;
+        const id = String(n.id);
+        const nowDragging = !!n.dragging;
+        const wasDragging = prevDragging.get(id) ?? false;
 
-      if (wasDragging && !nowDragging) {
-        updates.push({
-          id,
-          xPos: Number(n.position?.x ?? 0),
-          yPos: Number(n.position?.y ?? 0)
-        });
+        if (wasDragging && !nowDragging) {
+          updates.push({
+            id,
+            xPos: Number(n.position?.x ?? 0),
+            yPos: Number(n.position?.y ?? 0)
+          });
+        }
+
+        prevDragging.set(id, nowDragging);
       }
 
-      prevDragging.set(id, nowDragging);
-    }
-
-    if (updates.length === 1) {
-      const u = updates[0];
-      updateNodePosition(u.id, u.xPos, u.yPos);
-    } else if (updates.length > 1) {
-      updateNodePositions(updates);
+      if (updates.length === 1) {
+        const u = updates[0];
+        updateNodePosition(u.id, u.xPos, u.yPos);
+      } else if (updates.length > 1) {
+        updateNodePositions(updates);
+      }
     }
   }
 
   function handleNodeDragStop(event: CustomEvent) {
+    if (isRunning) return;
+
     const detail: any = event.detail;
     const node: any = detail?.node;
     if (!node) return;
@@ -157,6 +168,8 @@
   }
 
   function handleSelectionDragStop(event: CustomEvent) {
+    if (isRunning) return;
+
     const detail: any = event.detail;
     const nodes: any[] = Array.isArray(detail?.nodes) ? detail.nodes : [];
     if (nodes.length === 0) return;
@@ -172,9 +185,11 @@
 
   $: mode = $placementMode;
 
-  function handleEdgeClick(payload: any) {
-    if (mode !== 'delete') return;
+  function handlePaneClick() {
+    setSelectedEdge(null);
+  }
 
+  function handleEdgeClick(payload: any) {
     const edge =
       payload?.detail?.edge ??
       payload?.edge ??
@@ -184,7 +199,16 @@
     const edgeId = edge?.id ? String(edge.id) : '';
     if (!edgeId) return;
 
-    deleteLinkById(edgeId);
+    if (mode === 'delete') {
+      if (isRunning) return;
+      deleteLinkById(edgeId);
+      if ($selectedEdgeId === edgeId) {
+        setSelectedEdge(null);
+      }
+      return;
+    }
+
+    setSelectedEdge(edgeId);
   }
 
   // Router placement
@@ -200,6 +224,7 @@
   }
 
   function handlePointerDown(event: PointerEvent) {
+    if (isRunning) return;
     if (mode !== 'router') return;
 
     const target = event.target as HTMLElement;
@@ -246,11 +271,13 @@
     {proOptions}
     nodeOrigin={[0.5, 0.5]}
     fitView
+    nodesDraggable={!isRunning}
     defaultEdgeOptions={{ selectable: true, interactionWidth: 32 }}
     on:nodedragstop={handleNodeDragStop}
     on:selectiondragstop={handleSelectionDragStop}
     on:edgeclick={handleEdgeClick}
     onedgeclick={handleEdgeClick}
+    on:paneClick={handlePaneClick}
   >
     <Background />
   </SvelteFlow>
@@ -312,6 +339,14 @@
     border: 2px dashed rgba(255, 255, 255, 0.75);
     z-index: 20;
     pointer-events: none;
+  }
+
+  :global(.edge-selected path) {
+    stroke-width: 4px;
+  }
+
+  :global(.edge-selected text) {
+    font-weight: 700;
   }
 </style>
 

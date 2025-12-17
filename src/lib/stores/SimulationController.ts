@@ -11,6 +11,7 @@ import { EndDevice } from "./EndDevice";
 import { RoutingStrategieType, type AlgorithmType } from "./RoutingStrategieType";
 import { LinkStateStrategy } from "./LinkStateStrategy";
 import { DistanceVectorStrategy } from "./DistanceVectorStrategy";
+import { RoutingEntry } from "./RoutingEntry";
 
 export class SimulationController {
   public currentStepIndex: number;
@@ -243,7 +244,106 @@ export class SimulationController {
     this.pushState();
   }
 
-  // -------------------------- Clear everything --------------------------
+  // -------------------------- Link weight editing ----------------------------
+
+  public updateLinkWeight(linkId: string, newWeight: number): void {
+    const link = this.findLinkById(linkId);
+    if (!link) {
+      return;
+    }
+
+    if (!Number.isFinite(newWeight) || newWeight <= 0) {
+      return;
+    }
+
+    if (link.weight === newWeight) {
+      return;
+    }
+
+    link.setWeight(newWeight);
+    this.pushState();
+  }
+
+  // -------------------------- Router editing ---------------------------------
+
+  public updateNodeName(nodeId: string, newName: string): void {
+    const node = this.topology.nodes.get(nodeId);
+    if (!node) {
+      return;
+    }
+
+    const trimmed = String(newName ?? "").trim();
+    if (trimmed.length === 0) {
+      return;
+    }
+
+    if (node.name === trimmed) {
+      return;
+    }
+
+    node.name = trimmed;
+    this.pushState();
+  }
+
+  public upsertRoutingEntry(
+    routerId: string,
+    destinationId: string,
+    nextHopId: string,
+    cost: number
+  ): void {
+    const node = this.topology.nodes.get(routerId);
+    if (!(node instanceof Router)) {
+      return;
+    }
+
+    const dest = String(destinationId ?? "").trim();
+    const hop = String(nextHopId ?? "").trim();
+
+    if (dest.length === 0 || hop.length === 0) {
+      return;
+    }
+
+    if (!Number.isFinite(cost) || cost < 0) {
+      return;
+    }
+
+    const entries = node.routingTable.entries;
+    const existing = entries.get(dest);
+
+    if (!existing) {
+      entries.set(dest, new RoutingEntry(dest, hop, cost));
+      this.pushState();
+      return;
+    }
+
+    const changed = existing.nextHopId !== hop || existing.cost !== cost;
+    if (!changed) {
+      return;
+    }
+
+    existing.nextHopId = hop;
+    existing.cost = cost;
+    this.pushState();
+  }
+
+  public deleteRoutingEntry(routerId: string, destinationId: string): void {
+    const node = this.topology.nodes.get(routerId);
+    if (!(node instanceof Router)) {
+      return;
+    }
+
+    const dest = String(destinationId ?? "").trim();
+    if (dest.length === 0) {
+      return;
+    }
+
+    const existed = node.routingTable.entries.delete(dest);
+    if (existed) {
+      this.pushState();
+    }
+  }
+
+  // -------------------------- Clear everything -------------------------------
 
   public clearNetwork(): void {
     const linksCopy = [...this.topology.links];
@@ -332,109 +432,6 @@ export class SimulationController {
     this.pushState();
   }
 
-  // ------------------------- Pfad anhand Routingtabellen ---------------------
-
-  private getFirstRouterNeighbor(device: EndDevice): Router | null {
-    for (const link of device.neighbors) {
-      const other = link.source === device ? link.target : link.source;
-      if (other instanceof Router) {
-        return other;
-      }
-    }
-    return null;
-  }
-
-  public getPath(sourceId: string, targetId: string): string[] {
-    const sourceNode = this.topology.nodes.get(sourceId);
-    const targetNode = this.topology.nodes.get(targetId);
-
-    if (!sourceNode || !targetNode) {
-      return [];
-    }
-
-    let startRouter: Router | null = null;
-    let targetRouter: Router | null = null;
-    const path: string[] = [];
-
-    if (sourceNode instanceof Router) {
-      startRouter = sourceNode;
-      path.push(sourceNode.id);
-    } else if (sourceNode instanceof EndDevice) {
-      const r = this.getFirstRouterNeighbor(sourceNode);
-      if (!r) return [];
-      startRouter = r;
-      path.push(sourceNode.id, r.id);
-    } else {
-      return [];
-    }
-
-    let appendTargetDevice = false;
-    if (targetNode instanceof Router) {
-      targetRouter = targetNode;
-    } else if (targetNode instanceof EndDevice) {
-      const r = this.getFirstRouterNeighbor(targetNode);
-      if (!r) return [];
-      targetRouter = r;
-      appendTargetDevice = true;
-    } else {
-      return [];
-    }
-
-    if (!startRouter || !targetRouter) {
-      return [];
-    }
-
-    const visited = new Set<string>();
-    let currentId = startRouter.id;
-    visited.add(currentId);
-
-    while (currentId !== targetRouter.id) {
-      const currentNode = this.topology.nodes.get(currentId);
-      if (!(currentNode instanceof Router) || !currentNode.routingTable) {
-        return [];
-      }
-
-      const entry = currentNode.routingTable.entries.get(targetRouter.id);
-      if (!entry) {
-        return [];
-      }
-
-      const nextHopId = entry.nextHopId;
-      if (visited.has(nextHopId)) {
-        return [];
-      }
-      visited.add(nextHopId);
-
-      if (path[path.length - 1] !== nextHopId) {
-        path.push(nextHopId);
-      }
-
-      currentId = nextHopId;
-
-      if (path.length > this.topology.nodes.size + 2) {
-        return [];
-      }
-    }
-
-    if (appendTargetDevice && path[path.length - 1] !== targetId) {
-      path.push(targetId);
-    }
-
-    for (const node of this.topology.nodes.values()) {
-      if (node instanceof Router) {
-        node.optimal = false;
-      }
-    }
-    for (const id of path) {
-      const node = this.topology.nodes.get(id);
-      if (node instanceof Router) {
-        node.optimal = true;
-      }
-    }
-
-    return path;
-  }
-
   // ------------------------------ JSON Import/Export -------------------------
 
   public importJson(jsonString: string): void {
@@ -442,7 +439,6 @@ export class SimulationController {
 
     const newTopology = new Topology();
 
-    // Nodes
     if (Array.isArray(data.nodes)) {
       for (const raw of data.nodes) {
         if (!raw || typeof raw.id !== "string") {
@@ -464,7 +460,6 @@ export class SimulationController {
       }
     }
 
-    // Links (ensure every link has a non-empty unique id)
     let linkIndex = 1;
     const nextLinkId = (): string => {
       while (newTopology.links.some((l) => l.id === `L${linkIndex}`)) {
@@ -504,7 +499,6 @@ export class SimulationController {
 
     this.topology = newTopology;
 
-    // Events
     this.events = new MinHeap<SimulationEvent>((a, b) => a.step - b.step);
     this.nodeEventMap = new Map<string, SimulationEvent[]>();
     this.linkEventMap = new Map<string, SimulationEvent[]>();
