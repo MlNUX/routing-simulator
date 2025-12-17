@@ -3,6 +3,8 @@
   import { SvelteFlow, Background, type NodeTypes } from '@xyflow/svelte';
 
   import RouterNode from '$lib/components/RouterNode.svelte';
+  import { notify } from '$lib/notify';
+
   import {
     simulation,
     setSelectedRouter,
@@ -15,7 +17,8 @@
     deleteLinkById,
     selectedEdgeId,
     setSelectedEdge,
-    setMultiSelection
+    setMultiSelection,
+    importJson as importSimulationJson
   } from '$lib/stores/simulation';
 
   const proOptions = { hideAttribution: true };
@@ -290,6 +293,73 @@
       // ignore
     }
   }
+
+  // ------------------- Drag & Drop JSON import -------------------
+
+  let isDragOver = false;
+
+  function isJsonFile(file: File): boolean {
+    const name = String(file?.name ?? '').toLowerCase();
+    const type = String(file?.type ?? '').toLowerCase();
+    return name.endsWith('.json') || type.includes('application/json');
+  }
+
+  function handleDragOver(event: DragEvent) {
+    if (!browser) return;
+    event.preventDefault();
+    isDragOver = true;
+  }
+
+  function handleDragLeave(event: DragEvent) {
+    if (!browser) return;
+    event.preventDefault();
+    isDragOver = false;
+  }
+
+  async function handleDrop(event: DragEvent) {
+    if (!browser) return;
+    event.preventDefault();
+    isDragOver = false;
+
+    const dt = event.dataTransfer;
+    const files = dt?.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    if (!isJsonFile(file)) {
+      await notify('Drop a .json file to import a topology.');
+      return;
+    }
+
+    const ok = window.confirm(`Import "${file.name}" and overwrite the current topology?`);
+    if (!ok) return;
+
+    try {
+      const text = await file.text();
+      importSimulationJson(text);
+      await notify(`Imported JSON: ${file.name}`);
+    } catch (e) {
+      console.error(e);
+      await notify('Import failed (invalid JSON?)');
+    }
+  }
+
+  // ------------------- Canvas UI: grid toggle + fit view -------------------
+
+  let showGrid = true;
+  let fitViewNonce = 0;
+
+  function toggleGrid(event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    showGrid = !showGrid;
+  }
+
+  function fitViewNow(event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    fitViewNonce = fitViewNonce + 1;
+  }
 </script>
 
 <div
@@ -297,31 +367,64 @@
   on:pointerdown={handlePointerDown}
   on:pointermove={handlePointerMove}
   on:pointerup={handlePointerUp}
+  on:dragover={handleDragOver}
+  on:dragleave={handleDragLeave}
+  on:drop={handleDrop}
 >
   {#if browser}
-    <SvelteFlow
-      bind:nodes={flowNodes}
-      bind:edges={flowEdges}
-      {nodeTypes}
-      {proOptions}
-      nodeOrigin={[0.5, 0.5]}
-      fitView
-      nodesDraggable={!isRunning}
-      snapToGrid={true}
-      snapGrid={[20, 20]}
-      selectionOnDrag={mode === 'delete'}
-      defaultEdgeOptions={{ selectable: true, interactionWidth: 32 }}
-      on:nodedragstop={handleNodeDragStop}
-      on:selectiondragstop={handleSelectionDragStop}
-      on:edgeclick={handleEdgeClick}
-      on:edgeClick={handleEdgeClick}
-      on:paneClick={handlePaneClick}
-      on:paneclick={handlePaneClick}
-    >
-      <Background variant="dots" gap={20} size={1} />
-    </SvelteFlow>
+    {#key fitViewNonce}
+      <SvelteFlow
+        bind:nodes={flowNodes}
+        bind:edges={flowEdges}
+        {nodeTypes}
+        {proOptions}
+        nodeOrigin={[0.5, 0.5]}
+        fitView
+        nodesDraggable={!isRunning}
+        snapToGrid={true}
+        snapGrid={[20, 20]}
+        selectionOnDrag={mode === 'delete'}
+        defaultEdgeOptions={{ selectable: true, interactionWidth: 32 }}
+        on:nodedragstop={handleNodeDragStop}
+        on:selectiondragstop={handleSelectionDragStop}
+        on:edgeclick={handleEdgeClick}
+        on:edgeClick={handleEdgeClick}
+        on:paneClick={handlePaneClick}
+        on:paneclick={handlePaneClick}
+      >
+        {#if showGrid}
+          <!-- Use a visible line grid with explicit color -->
+          <Background
+            variant="lines"
+            gap={20}
+            size={1}
+            color="rgba(226, 232, 240, 0.14)"
+            bgColor="transparent"
+          />
+        {/if}
+      </SvelteFlow>
+    {/key}
   {:else}
     <div class="ssr-placeholder"></div>
+  {/if}
+
+  {#if browser}
+    <div class="canvas-tools" aria-label="Canvas tools">
+      <button class="canvas-btn" on:click={fitViewNow} title="Fit view">
+        Fit
+      </button>
+      <button class="canvas-btn" on:click={toggleGrid} title="Toggle grid">
+        Grid: {showGrid ? 'On' : 'Off'}
+      </button>
+    </div>
+  {/if}
+
+  {#if isDragOver}
+    <div class="drop-overlay">
+      <div class="drop-card">
+        Drop JSON to import topology
+      </div>
+    </div>
   {/if}
 
   {#if mode === 'link'}
@@ -356,6 +459,53 @@
     inset: 0;
   }
 
+  .canvas-tools {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    display: flex;
+    gap: 8px;
+    z-index: 25;
+    pointer-events: auto;
+  }
+
+  .canvas-btn {
+    padding: 8px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(15, 23, 42, 0.18);
+    background: rgba(255, 255, 255, 0.92);
+    color: #0f172a;
+    font-size: 11px;
+    cursor: pointer;
+    box-shadow: 0 6px 12px rgba(15, 23, 42, 0.12);
+  }
+
+  .canvas-btn:hover {
+    background: rgba(255, 255, 255, 0.98);
+  }
+
+  .drop-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.25);
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .drop-card {
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.18);
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
   .tool-hint {
     position: absolute;
     left: 24px;
@@ -388,7 +538,6 @@
     pointer-events: none;
   }
 
-  /* Fallback highlight if xyflow uses `.selected` */
   :global(.svelte-flow__edge.selected path) {
     stroke: #f97316;
     stroke-width: 4px;
