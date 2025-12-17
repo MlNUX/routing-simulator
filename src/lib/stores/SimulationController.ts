@@ -187,6 +187,17 @@ export class SimulationController {
       throw new Error("Source or target node does not exist");
     }
 
+    // Only one physical link between two nodes
+    const alreadyExists = this.topology.links.some((l) => {
+      const a = l.source === source && l.target === target;
+      const b = l.source === target && l.target === source;
+      return a || b;
+    });
+
+    if (alreadyExists) {
+      return;
+    }
+
     const id = this.generateLinkId();
     const link = new Link(id, source, target, weight);
     this.topology.links.push(link);

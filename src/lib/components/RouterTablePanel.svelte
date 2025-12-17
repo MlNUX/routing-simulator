@@ -57,7 +57,6 @@
     if (!router?.routingTable?.entries) return [];
 
     const entries = router.routingTable.entries;
-
     const rawEntries: any[] =
       entries instanceof Map ? Array.from(entries.values()) : Object.values(entries);
 
@@ -93,9 +92,31 @@
     return out;
   }
 
+  function getAllRouterIds(topo: any): string[] {
+    if (!topo?.nodes) return [];
+    const rawNodes = topo.nodes;
+    const arr = rawNodes instanceof Map ? Array.from(rawNodes.values()) : Array.isArray(rawNodes) ? rawNodes : [];
+    const ids: string[] = [];
+    for (const n of arr) {
+      const isRouter = n?.constructor?.name === 'Router';
+      if (isRouter && n?.id) ids.push(String(n.id));
+    }
+    ids.sort((a, b) => a.localeCompare(b));
+    return ids;
+  }
+
   $: selectedRouter = getRouterById(topology, selectedId);
   $: routingEntries = selectedRouter ? extractRoutingEntries(selectedRouter) : [];
   $: neighbors = selectedRouter ? getNeighbors(topology, String(selectedRouter.id)) : [];
+
+  $: allRouterIds = getAllRouterIds(topology);
+  $: selfId = selectedRouter ? String(selectedRouter.id) : '';
+  $: destinationOptions = allRouterIds.filter((id) => id !== selfId);
+
+  // For "next hop" pick only neighbor routers
+  $: neighborRouterIds = neighbors
+    .map((n) => n.otherId)
+    .filter((id) => allRouterIds.includes(id));
 
   $: selectedLink = getLinkById(topology, edgeId);
   $: linkSourceId = selectedLink?.source?.id ?? '';
@@ -126,32 +147,84 @@
   }
 
   function handleNameKeydown(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
-      commitRouterName();
-    }
+    if (event.key === 'Enter') commitRouterName();
     if (event.key === 'Escape') {
       nameDirty = false;
       routerNameDraft = String(selectedRouter?.name ?? selectedRouter?.id ?? '');
     }
   }
 
-  // Routing entry add form
+  // Routing table: add (NO overwrite)
+  let showAddRoute = false;
+  let addError: string | null = null;
+
   let newDest = '';
   let newNextHop = '';
   let newCost = 1;
 
-  function addEntry() {
+  $: if (selectedRouter && !showAddRoute) {
+    addError = null;
+    newDest = '';
+    newNextHop = '';
+    newCost = 1;
+  }
+
+  function toggleAddRoute() {
+    showAddRoute = !showAddRoute;
+    addError = null;
+
+    if (showAddRoute) {
+      newDest = destinationOptions[0] ?? '';
+      newNextHop = neighborRouterIds[0] ?? '';
+      newCost = 1;
+    }
+  }
+
+  function addEntryNoOverwrite() {
     if (!selectedRouter) return;
 
     const dest = newDest.trim();
     const hop = newNextHop.trim();
     const cost = Number(newCost);
 
-    if (dest.length === 0 || hop.length === 0) return;
-    if (!Number.isFinite(cost) || cost < 0) return;
+    addError = null;
+
+    if (dest.length === 0) {
+      addError = 'Destination is required.';
+      return;
+    }
+    if (dest === selfId) {
+      addError = 'Destination cannot be the same router.';
+      return;
+    }
+    if (!destinationOptions.includes(dest)) {
+      addError = 'Destination must be an existing router.';
+      return;
+    }
+    if (hop.length === 0) {
+      addError = 'Next hop is required.';
+      return;
+    }
+    if (!neighborRouterIds.includes(hop)) {
+      addError = 'Next hop must be a direct neighbor router.';
+      return;
+    }
+    if (!Number.isFinite(cost) || cost < 0) {
+      addError = 'Cost must be a number ≥ 0.';
+      return;
+    }
+
+    // Check: only one route per destination (no overwrite via add form)
+    const exists = routingEntries.some((e) => e.destinationId === dest);
+    if (exists) {
+      addError = `Route to ${dest} already exists. Edit the existing entry instead.`;
+      return;
+    }
 
     upsertRoutingEntry(String(selectedRouter.id), dest, hop, cost);
 
+    showAddRoute = false;
+    addError = null;
     newDest = '';
     newNextHop = '';
     newCost = 1;
@@ -177,8 +250,8 @@
 
     const existing = routingEntries.find((e) => e.destinationId === destinationId);
     const hop = existing ? existing.nextHopId : '';
-
     if (hop.trim().length === 0) return;
+
     upsertRoutingEntry(String(selectedRouter.id), destinationId, hop, cost);
   }
 
@@ -202,6 +275,8 @@
   function closeRouterPanel() {
     setSelectedRouter(null);
     nameDirty = false;
+    showAddRoute = false;
+    addError = null;
   }
 </script>
 
@@ -315,33 +390,55 @@
         </table>
       {/if}
 
-      <div class="add-box">
-        <div class="section-title" style="margin-bottom: 6px;">Add / overwrite entry</div>
-
-        <label class="field-label">Destination</label>
-        <input class="field-input mono" type="text" bind:value={newDest} disabled={isRunning} />
-
-        <label class="field-label" style="margin-top: 8px;">Next hop</label>
-        <input class="field-input mono" type="text" bind:value={newNextHop} disabled={isRunning} />
-
-        <label class="field-label" style="margin-top: 8px;">Cost</label>
-        <input
-          class="field-input"
-          type="number"
-          min="0"
-          step="1"
-          bind:value={newCost}
-          disabled={isRunning}
-        />
-
+      <div style="margin-top: 10px;">
         <button
           class="btn-small-primary"
-          style="margin-top: 10px; width: 100%;"
-          disabled={isRunning || newDest.trim().length === 0 || newNextHop.trim().length === 0}
-          on:click={addEntry}
+          disabled={isRunning || destinationOptions.length === 0 || neighborRouterIds.length === 0}
+          on:click={toggleAddRoute}
         >
-          Add / overwrite
+          {showAddRoute ? 'Cancel' : 'Add route'}
         </button>
+
+        {#if showAddRoute}
+          <div class="add-inline">
+            {#if addError}
+              <div class="error">{addError}</div>
+            {/if}
+
+            <label class="field-label">Destination</label>
+            <select class="field-input" bind:value={newDest} disabled={isRunning}>
+              {#each destinationOptions as rid (rid)}
+                <option value={rid}>{rid}</option>
+              {/each}
+            </select>
+
+            <label class="field-label" style="margin-top: 8px;">Next hop (neighbor)</label>
+            <select class="field-input" bind:value={newNextHop} disabled={isRunning}>
+              {#each neighborRouterIds as rid (rid)}
+                <option value={rid}>{rid}</option>
+              {/each}
+            </select>
+
+            <label class="field-label" style="margin-top: 8px;">Cost</label>
+            <input
+              class="field-input"
+              type="number"
+              min="0"
+              step="1"
+              bind:value={newCost}
+              disabled={isRunning}
+            />
+
+            <button
+              class="btn-small-primary"
+              style="margin-top: 10px; width: 100%;"
+              disabled={isRunning}
+              on:click={addEntryNoOverwrite}
+            >
+              Add
+            </button>
+          </div>
+        {/if}
       </div>
     </div>
 
@@ -497,12 +594,22 @@
     font-size: 11px;
   }
 
-  .add-box {
+  .add-inline {
     margin-top: 10px;
     padding: 10px;
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.75);
     border: 1px solid rgba(15, 23, 42, 0.08);
+  }
+
+  .error {
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #7f1d1d;
+    font-size: 11px;
   }
 </style>
 

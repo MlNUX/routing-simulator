@@ -1,10 +1,6 @@
 <script lang="ts">
-  import {
-    SvelteFlow,
-    Background,
-    type NodeTypes,
-    useSvelteFlow
-  } from '@xyflow/svelte';
+  import { browser } from '$app/environment';
+  import { SvelteFlow, Background, type NodeTypes } from '@xyflow/svelte';
 
   import RouterNode from '$lib/components/RouterNode.svelte';
   import {
@@ -21,8 +17,6 @@
     setSelectedEdge,
     setMultiSelection
   } from '$lib/stores/simulation';
-
-  const { screenToFlowPosition } = useSvelteFlow();
 
   const proOptions = { hideAttribution: true };
 
@@ -82,33 +76,37 @@
         type: 'router',
         position: { x, y },
         data: {
-          label: node.name ?? id,
+          label: node?.name ?? id,
+          optimal: !!node?.optimal,
           onSelect: (rid: string) => setSelectedRouter(rid)
         }
       };
     });
   }
 
-  function buildFlowEdgesFromTopology(topo: any): any[] {
+  function buildFlowEdgesFromTopology(topo: any, selectedId: string | null): any[] {
     if (!topo || !topo.links) return [];
 
     return topo.links.map((link: any) => {
       const id = String(link.id);
-      const isSelected = $selectedEdgeId === id;
+      const isSelected = selectedId === id;
 
       return {
         id,
         source: link.source?.id,
         target: link.target?.id,
         label: String(link.weight ?? ''),
-        class: isSelected ? 'edge-selected' : ''
+        selectable: true,
+        selected: isSelected,
+        style: isSelected ? { stroke: '#f97316', strokeWidth: 4 } : undefined,
+        labelStyle: isSelected ? { fill: '#f97316', fontWeight: 700 } : undefined
       };
     });
   }
 
   $: if (topology) {
-    flowEdges = buildFlowEdgesFromTopology(topology);
     flowNodes = buildFlowNodesFromTopology(topology);
+    flowEdges = buildFlowEdgesFromTopology(topology, $selectedEdgeId);
   }
 
   $: {
@@ -123,7 +121,7 @@
 
   $: mode = $placementMode;
 
-  // Multi-select only in delete mode: collect selected items from flow bindings
+  // Multi-select only in delete mode
   $: {
     if (mode === 'delete') {
       const selectedNodeIds = flowNodes
@@ -237,10 +235,6 @@
     return Math.round(v / SNAP) * SNAP;
   }
 
-  function snapPoint(p: { x: number; y: number }): { x: number; y: number } {
-    return { x: snapValue(p.x), y: snapValue(p.y) };
-  }
-
   // ------------------- Router placement -------------------
 
   let isPlacing = false;
@@ -255,6 +249,7 @@
   }
 
   function handlePointerDown(event: PointerEvent) {
+    if (!browser) return;
     if (isRunning) return;
     if (mode !== 'router') return;
 
@@ -267,22 +262,28 @@
   }
 
   function handlePointerMove(event: PointerEvent) {
+    if (!browser) return;
     if (!isPlacing) return;
     updatePreview(event);
   }
 
   function handlePointerUp(event: PointerEvent) {
+    if (!browser) return;
     if (!isPlacing) return;
 
-    const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-    const snapped = snapPoint(flowPos);
+    const wrapper = event.currentTarget as HTMLDivElement;
+    const rect = wrapper.getBoundingClientRect();
+    const rawX = event.clientX - rect.left;
+    const rawY = event.clientY - rect.top;
 
-    addNode(snapped.x, snapped.y);
+    const x = snapValue(rawX);
+    const y = snapValue(rawY);
+
+    addNode(x, y);
 
     isPlacing = false;
     clearPlacementMode();
 
-    const wrapper = event.currentTarget as HTMLDivElement;
     try {
       wrapper.releasePointerCapture(event.pointerId);
     } catch {
@@ -297,26 +298,31 @@
   on:pointermove={handlePointerMove}
   on:pointerup={handlePointerUp}
 >
-  <SvelteFlow
-    bind:nodes={flowNodes}
-    bind:edges={flowEdges}
-    {nodeTypes}
-    {proOptions}
-    nodeOrigin={[0.5, 0.5]}
-    fitView
-    nodesDraggable={!isRunning}
-    snapToGrid={true}
-    snapGrid={[20, 20]}
-    selectionOnDrag={mode === 'delete'}
-    defaultEdgeOptions={{ selectable: true, interactionWidth: 32 }}
-    on:nodedragstop={handleNodeDragStop}
-    on:selectiondragstop={handleSelectionDragStop}
-    on:edgeclick={handleEdgeClick}
-    onedgeclick={handleEdgeClick}
-    on:paneClick={handlePaneClick}
-  >
-    <Background variant="dots" gap={20} size={1} />
-  </SvelteFlow>
+  {#if browser}
+    <SvelteFlow
+      bind:nodes={flowNodes}
+      bind:edges={flowEdges}
+      {nodeTypes}
+      {proOptions}
+      nodeOrigin={[0.5, 0.5]}
+      fitView
+      nodesDraggable={!isRunning}
+      snapToGrid={true}
+      snapGrid={[20, 20]}
+      selectionOnDrag={mode === 'delete'}
+      defaultEdgeOptions={{ selectable: true, interactionWidth: 32 }}
+      on:nodedragstop={handleNodeDragStop}
+      on:selectiondragstop={handleSelectionDragStop}
+      on:edgeclick={handleEdgeClick}
+      on:edgeClick={handleEdgeClick}
+      on:paneClick={handlePaneClick}
+      on:paneclick={handlePaneClick}
+    >
+      <Background variant="dots" gap={20} size={1} />
+    </SvelteFlow>
+  {:else}
+    <div class="ssr-placeholder"></div>
+  {/if}
 
   {#if mode === 'link'}
     <div class="tool-hint">
@@ -345,6 +351,11 @@
 </div>
 
 <style>
+  .ssr-placeholder {
+    position: absolute;
+    inset: 0;
+  }
+
   .tool-hint {
     position: absolute;
     left: 24px;
@@ -377,15 +388,10 @@
     pointer-events: none;
   }
 
-  /* Selected link color */
-  :global(.edge-selected path) {
+  /* Fallback highlight if xyflow uses `.selected` */
+  :global(.svelte-flow__edge.selected path) {
     stroke: #f97316;
     stroke-width: 4px;
-  }
-
-  :global(.edge-selected text) {
-    fill: #f97316;
-    font-weight: 700;
   }
 </style>
 
