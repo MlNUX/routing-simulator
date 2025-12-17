@@ -7,8 +7,8 @@
     setSelectedRouter,
     updateLinkWeight,
     updateNodeName,
-    upsertRoutingEntry,
-    deleteRoutingEntry
+    addLink,
+    deleteLinkById
   } from '$lib/stores/simulation';
 
   type RoutingEntryView = {
@@ -34,23 +34,37 @@
   $: selectedId = $selectedRouterId;
   $: edgeId = $selectedEdgeId;
 
+  function topologyNodesArray(topo: any): any[] {
+    if (!topo || !topo.nodes) return [];
+    const rawNodes = topo.nodes;
+    if (Array.isArray(rawNodes)) return rawNodes;
+    if (rawNodes instanceof Map) return Array.from(rawNodes.values());
+    return [];
+  }
+
   function getRouterById(topo: any, id: string | null): any | null {
     if (!topo || !id) return null;
-
-    const rawNodes = topo.nodes;
-    const nodesArray = Array.isArray(rawNodes)
-      ? rawNodes
-      : rawNodes instanceof Map
-        ? Array.from(rawNodes.values())
-        : [];
-
-    return nodesArray.find((n: any) => String(n.id) === String(id)) ?? null;
+    const arr = topologyNodesArray(topo);
+    return arr.find((n: any) => String(n.id) === String(id)) ?? null;
   }
 
   function getLinkById(topo: any, id: string | null): any | null {
     if (!topo || !id) return null;
     const links: any[] = Array.isArray(topo.links) ? topo.links : [];
     return links.find((l) => String(l.id) === String(id)) ?? null;
+  }
+
+  function getAllRouterIds(topo: any): string[] {
+    const arr = topologyNodesArray(topo);
+    const ids: string[] = [];
+
+    for (const n of arr) {
+      const isRouter = n?.constructor?.name === 'Router';
+      if (isRouter && n?.id) ids.push(String(n.id));
+    }
+
+    ids.sort((a, b) => a.localeCompare(b));
+    return ids;
   }
 
   function extractRoutingEntries(router: any): RoutingEntryView[] {
@@ -92,38 +106,26 @@
     return out;
   }
 
-  function getAllRouterIds(topo: any): string[] {
-    if (!topo?.nodes) return [];
-    const rawNodes = topo.nodes;
-    const arr = rawNodes instanceof Map ? Array.from(rawNodes.values()) : Array.isArray(rawNodes) ? rawNodes : [];
-    const ids: string[] = [];
-    for (const n of arr) {
-      const isRouter = n?.constructor?.name === 'Router';
-      if (isRouter && n?.id) ids.push(String(n.id));
-    }
-    ids.sort((a, b) => a.localeCompare(b));
-    return ids;
-  }
-
   $: selectedRouter = getRouterById(topology, selectedId);
-  $: routingEntries = selectedRouter ? extractRoutingEntries(selectedRouter) : [];
-  $: neighbors = selectedRouter ? getNeighbors(topology, String(selectedRouter.id)) : [];
 
   $: allRouterIds = getAllRouterIds(topology);
   $: selfId = selectedRouter ? String(selectedRouter.id) : '';
-  $: destinationOptions = allRouterIds.filter((id) => id !== selfId);
 
-  // For "next hop" pick only neighbor routers
-  $: neighborRouterIds = neighbors
-    .map((n) => n.otherId)
-    .filter((id) => allRouterIds.includes(id));
+  // Direct links (neighbors), but only to other routers
+  $: neighborsAll = selectedRouter ? getNeighbors(topology, selfId) : [];
+  $: neighborRouterLinks = neighborsAll.filter((n) => allRouterIds.includes(n.otherId));
 
+  // Routing table (read-only), hide self-entry
+  $: routingEntriesAll = selectedRouter ? extractRoutingEntries(selectedRouter) : [];
+  $: routingEntries = routingEntriesAll.filter((e) => e.destinationId !== selfId);
+
+  // Edge panel (when a link is selected instead of a router)
   $: selectedLink = getLinkById(topology, edgeId);
   $: linkSourceId = selectedLink?.source?.id ?? '';
   $: linkTargetId = selectedLink?.target?.id ?? '';
   $: linkWeightValue = Number(selectedLink?.weight ?? 1);
 
-  // Router editor local state
+  // ------------------- Name section -------------------
   let routerNameDraft = '';
   let nameDirty = false;
 
@@ -154,112 +156,75 @@
     }
   }
 
-  // Routing table: add (NO overwrite)
-  let showAddRoute = false;
-  let addError: string | null = null;
+  // ------------------- Connections section (editable) -------------------
+  let showAddConnection = false;
+  let connError: string | null = null;
 
-  let newDest = '';
-  let newNextHop = '';
-  let newCost = 1;
+  let newConnTarget = '';
+  let newConnWeight = 1;
 
-  $: if (selectedRouter && !showAddRoute) {
-    addError = null;
-    newDest = '';
-    newNextHop = '';
-    newCost = 1;
-  }
+  $: connectedRouterIds = neighborRouterLinks.map((n) => n.otherId);
+  $: availableTargets =
+    selfId.length === 0
+      ? []
+      : allRouterIds.filter((id) => id !== selfId && !connectedRouterIds.includes(id));
 
-  function toggleAddRoute() {
-    showAddRoute = !showAddRoute;
-    addError = null;
+  function toggleAddConnection() {
+    showAddConnection = !showAddConnection;
+    connError = null;
 
-    if (showAddRoute) {
-      newDest = destinationOptions[0] ?? '';
-      newNextHop = neighborRouterIds[0] ?? '';
-      newCost = 1;
+    if (showAddConnection) {
+      newConnTarget = availableTargets[0] ?? '';
+      newConnWeight = 1;
     }
   }
 
-  function addEntryNoOverwrite() {
+  function commitAddConnection() {
     if (!selectedRouter) return;
 
-    const dest = newDest.trim();
-    const hop = newNextHop.trim();
-    const cost = Number(newCost);
+    connError = null;
 
-    addError = null;
+    const target = String(newConnTarget ?? '').trim();
+    const weight = Number(newConnWeight);
 
-    if (dest.length === 0) {
-      addError = 'Destination is required.';
+    if (target.length === 0) {
+      connError = 'Target router is required.';
       return;
     }
-    if (dest === selfId) {
-      addError = 'Destination cannot be the same router.';
+    if (!availableTargets.includes(target)) {
+      connError = 'Target must be a router that is not already connected.';
       return;
     }
-    if (!destinationOptions.includes(dest)) {
-      addError = 'Destination must be an existing router.';
-      return;
-    }
-    if (hop.length === 0) {
-      addError = 'Next hop is required.';
-      return;
-    }
-    if (!neighborRouterIds.includes(hop)) {
-      addError = 'Next hop must be a direct neighbor router.';
-      return;
-    }
-    if (!Number.isFinite(cost) || cost < 0) {
-      addError = 'Cost must be a number ≥ 0.';
+    if (!Number.isFinite(weight) || weight <= 0) {
+      connError = 'Weight must be a number > 0.';
       return;
     }
 
-    // Check: only one route per destination (no overwrite via add form)
-    const exists = routingEntries.some((e) => e.destinationId === dest);
-    if (exists) {
-      addError = `Route to ${dest} already exists. Edit the existing entry instead.`;
-      return;
-    }
+    addLink(selfId, target, weight);
 
-    upsertRoutingEntry(String(selectedRouter.id), dest, hop, cost);
-
-    showAddRoute = false;
-    addError = null;
-    newDest = '';
-    newNextHop = '';
-    newCost = 1;
+    showAddConnection = false;
+    connError = null;
+    newConnTarget = '';
+    newConnWeight = 1;
   }
 
-  function handleExistingHopChange(destinationId: string, event: Event) {
-    if (!selectedRouter) return;
+  function handleNeighborWeightChange(linkId: string, event: Event) {
+    if (isRunning) return;
     const el = event.currentTarget as HTMLInputElement;
-    const hop = el.value.trim();
-    if (hop.length === 0) return;
-
-    const existing = routingEntries.find((e) => e.destinationId === destinationId);
-    const cost = existing ? existing.cost : 0;
-
-    upsertRoutingEntry(String(selectedRouter.id), destinationId, hop, cost);
+    const w = Number(el.value);
+    if (!Number.isFinite(w) || w <= 0) return;
+    updateLinkWeight(linkId, w);
   }
 
-  function handleExistingCostChange(destinationId: string, event: Event) {
-    if (!selectedRouter) return;
-    const el = event.currentTarget as HTMLInputElement;
-    const cost = Number(el.value);
-    if (!Number.isFinite(cost) || cost < 0) return;
-
-    const existing = routingEntries.find((e) => e.destinationId === destinationId);
-    const hop = existing ? existing.nextHopId : '';
-    if (hop.trim().length === 0) return;
-
-    upsertRoutingEntry(String(selectedRouter.id), destinationId, hop, cost);
+  function removeConnection(linkId: string) {
+    if (isRunning) return;
+    deleteLinkById(linkId);
+    if ($selectedEdgeId === linkId) {
+      setSelectedEdge(null);
+    }
   }
 
-  function removeEntry(destinationId: string) {
-    if (!selectedRouter) return;
-    deleteRoutingEntry(String(selectedRouter.id), destinationId);
-  }
-
+  // ------------------- Link panel helpers -------------------
   function handleLinkWeightChange(event: Event) {
     if (!selectedLink) return;
     const el = event.currentTarget as HTMLInputElement;
@@ -275,8 +240,8 @@
   function closeRouterPanel() {
     setSelectedRouter(null);
     nameDirty = false;
-    showAddRoute = false;
-    addError = null;
+    showAddConnection = false;
+    connError = null;
   }
 </script>
 
@@ -288,9 +253,11 @@
   {#if selectedRouter}
     <h3>Router: {selectedRouter.id}</h3>
 
+    <!-- 1) Name -->
     <div class="section">
-      <label class="field-label">Name</label>
-      <div class="row">
+      <div class="section-title">Name</div>
+
+      <div class="row" style="margin-top: 6px;">
         <input
           class="field-input"
           type="text"
@@ -310,32 +277,137 @@
       </div>
 
       <div class="meta">
-        <div><b>Position:</b> {Number(selectedRouter.xPos ?? 0).toFixed(1)} / {Number(selectedRouter.yPos ?? 0).toFixed(1)}</div>
-        <div style="margin-top: 4px;">
-          <b>Neighbors:</b>
-          {#if neighbors.length === 0}
-            none
+        <div>
+          <b>Position:</b>
+          {Number(selectedRouter.xPos ?? 0).toFixed(1)} / {Number(selectedRouter.yPos ?? 0).toFixed(1)}
+        </div>
+
+        {#if isRunning}
+          <p class="hint">Pause simulation to edit router properties.</p>
+        {/if}
+      </div>
+    </div>
+
+    <!-- 2) Connections (editable) -->
+    <div class="section">
+      <div class="section-title">Connections</div>
+      <p class="hint" style="margin-top: 4px;">
+        Direct links from this router to other routers (weights are editable).
+      </p>
+
+      {#if neighborRouterLinks.length === 0}
+        <p class="subtle">No router connections.</p>
+      {:else}
+        <table class="rt-table">
+          <thead>
+            <tr>
+              <th>To</th>
+              <th>Weight</th>
+              <th>Link</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each neighborRouterLinks as n (n.linkId)}
+              <tr>
+                <td class="mono">{n.otherId}</td>
+                <td>
+                  <input
+                    class="table-input"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={n.weight}
+                    disabled={isRunning}
+                    on:change={(e) => handleNeighborWeightChange(n.linkId, e)}
+                  />
+                </td>
+                <td class="mono">{n.linkId}</td>
+                <td>
+                  <button
+                    class="btn-icon"
+                    title="Delete connection"
+                    disabled={isRunning}
+                    on:click={() => removeConnection(n.linkId)}
+                  >
+                    🗑
+                  </button>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
+
+      <div style="margin-top: 10px; display:flex; align-items:center; gap: 8px;">
+        <button
+          class="btn-small-primary"
+          disabled={isRunning || availableTargets.length === 0}
+          on:click={toggleAddConnection}
+          title="Add connection"
+        >
+          +
+        </button>
+
+        <div class="subtle" style="margin: 0;">
+          {#if availableTargets.length === 0}
+            No available routers to connect.
           {:else}
-            <ul class="neighbor-list">
-              {#each neighbors as n (n.linkId)}
-                <li class="mono">
-                  {n.otherId} (w={n.weight}) — {n.linkId}
-                </li>
-              {/each}
-            </ul>
+            Add a new direct link from {selfId}.
           {/if}
         </div>
       </div>
 
-      {#if isRunning}
-        <p class="hint">Pause simulation to edit router properties.</p>
+      {#if showAddConnection}
+        <div class="add-inline">
+          {#if connError}
+            <div class="error">{connError}</div>
+          {/if}
+
+          <label class="field-label">Target router</label>
+          <select class="field-input" bind:value={newConnTarget} disabled={isRunning}>
+            {#each availableTargets as rid (rid)}
+              <option value={rid}>{rid}</option>
+            {/each}
+          </select>
+
+          <label class="field-label" style="margin-top: 8px;">Weight</label>
+          <input
+            class="field-input"
+            type="number"
+            min="1"
+            step="1"
+            bind:value={newConnWeight}
+            disabled={isRunning}
+          />
+
+          <div style="margin-top: 10px; display:flex; gap: 8px;">
+            <button
+              class="btn-small-primary"
+              style="flex: 1;"
+              disabled={isRunning}
+              on:click={commitAddConnection}
+            >
+              Create link
+            </button>
+            <button
+              class="btn-small-primary"
+              style="flex: 1;"
+              disabled={isRunning}
+              on:click={toggleAddConnection}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       {/if}
     </div>
 
+    <!-- 3) Routing table (read-only) -->
     <div class="section">
       <div class="section-title">Routing table</div>
       <p class="hint" style="margin-top: 4px;">
-        Manual edits may be overwritten when you step/run the algorithm.
+        Read-only (computed by the algorithm).
       </p>
 
       {#if routingEntries.length === 0}
@@ -347,99 +419,19 @@
               <th>Destination</th>
               <th>Next hop</th>
               <th>Cost</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {#each routingEntries as entry (entry.destinationId)}
               <tr>
                 <td class="mono">{entry.destinationId}</td>
-                <td>
-                  <input
-                    class="table-input mono"
-                    type="text"
-                    value={entry.nextHopId}
-                    disabled={isRunning}
-                    on:change={(e) => handleExistingHopChange(entry.destinationId, e)}
-                  />
-                </td>
-                <td>
-                  <input
-                    class="table-input"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={entry.cost}
-                    disabled={isRunning}
-                    on:change={(e) => handleExistingCostChange(entry.destinationId, e)}
-                  />
-                </td>
-                <td>
-                  <button
-                    class="btn-icon"
-                    title="Delete entry"
-                    disabled={isRunning}
-                    on:click={() => removeEntry(entry.destinationId)}
-                  >
-                    🗑
-                  </button>
-                </td>
+                <td class="mono">{entry.nextHopId}</td>
+                <td>{entry.cost}</td>
               </tr>
             {/each}
           </tbody>
         </table>
       {/if}
-
-      <div style="margin-top: 10px;">
-        <button
-          class="btn-small-primary"
-          disabled={isRunning || destinationOptions.length === 0 || neighborRouterIds.length === 0}
-          on:click={toggleAddRoute}
-        >
-          {showAddRoute ? 'Cancel' : 'Add route'}
-        </button>
-
-        {#if showAddRoute}
-          <div class="add-inline">
-            {#if addError}
-              <div class="error">{addError}</div>
-            {/if}
-
-            <label class="field-label">Destination</label>
-            <select class="field-input" bind:value={newDest} disabled={isRunning}>
-              {#each destinationOptions as rid (rid)}
-                <option value={rid}>{rid}</option>
-              {/each}
-            </select>
-
-            <label class="field-label" style="margin-top: 8px;">Next hop (neighbor)</label>
-            <select class="field-input" bind:value={newNextHop} disabled={isRunning}>
-              {#each neighborRouterIds as rid (rid)}
-                <option value={rid}>{rid}</option>
-              {/each}
-            </select>
-
-            <label class="field-label" style="margin-top: 8px;">Cost</label>
-            <input
-              class="field-input"
-              type="number"
-              min="0"
-              step="1"
-              bind:value={newCost}
-              disabled={isRunning}
-            />
-
-            <button
-              class="btn-small-primary"
-              style="margin-top: 10px; width: 100%;"
-              disabled={isRunning}
-              on:click={addEntryNoOverwrite}
-            >
-              Add
-            </button>
-          </div>
-        {/if}
-      </div>
     </div>
 
     <button class="btn-small-primary" style="margin-top: 10px;" on:click={closeRouterPanel}>
@@ -470,7 +462,7 @@
     </button>
 
   {:else}
-    <p>Select a router to edit its name/table, or click a link to edit its weight.</p>
+    <p>Select a router to view/edit its name and connections, or click a link to edit its weight.</p>
   {/if}
 </div>
 
@@ -556,11 +548,6 @@
     border: 1px solid rgba(15, 23, 42, 0.08);
     font-size: 11px;
     color: #0f172a;
-  }
-
-  .neighbor-list {
-    margin: 4px 0 0 16px;
-    padding: 0;
   }
 
   .rt-table {
