@@ -21,7 +21,9 @@
     toggleRouterPlacement,
     toggleLinkPlacement,
     clearPlacementMode,
-    deleteSelection
+    deleteSelection,
+    undo,
+    redo
   } from '$lib/stores/simulation';
 
   $: controller = $simulation as any;
@@ -36,8 +38,28 @@
   }
 
   onMount(() => {
+    const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
+
     const handler = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) {
+        return;
+      }
+
+      // Undo/Redo
+      const mod = isMac ? e.metaKey : e.ctrlKey;
+      if (mod && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+        return;
+      }
+
+      if (mod && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault();
+        redo();
         return;
       }
 
@@ -82,18 +104,15 @@
         return;
       }
 
-      // Delete key:
-      // - if something is selected, delete it
-      // - otherwise toggle delete tool
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        e.preventDefault();
-        deleteSelection();
+      if (e.key === 'd' || e.key === 'D') {
         toggleDeletePlacement();
         return;
       }
 
-      if (e.key === 'd' || e.key === 'D') {
-        toggleDeletePlacement();
+      // Delete selection
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        deleteSelection();
         return;
       }
     };

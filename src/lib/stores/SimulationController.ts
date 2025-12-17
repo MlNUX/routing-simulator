@@ -12,6 +12,7 @@ import { RoutingStrategieType, type AlgorithmType } from "./RoutingStrategieType
 import { LinkStateStrategy } from "./LinkStateStrategy";
 import { DistanceVectorStrategy } from "./DistanceVectorStrategy";
 import { RoutingEntry } from "./RoutingEntry";
+import { RoutingTable } from "./RoutingTable";
 
 export class SimulationController {
   public currentStepIndex: number;
@@ -42,8 +43,6 @@ export class SimulationController {
   public get isPlaying(): boolean {
     return this.playing;
   }
-
-  // ----------------------------- Basis / Timeline ----------------------------
 
   private pushState(): void {
     const state = new SimulationState(this.currentStepIndex, this.topology);
@@ -444,6 +443,7 @@ export class SimulationController {
         if (!raw || typeof raw.id !== "string") {
           continue;
         }
+
         const id: string = raw.id;
         const name: string = raw.name ?? raw.id;
         const xPos: number = typeof raw.xPos === "number" ? raw.xPos : 0;
@@ -451,11 +451,32 @@ export class SimulationController {
         const type: string = raw.type ?? "router";
 
         let node: Router | EndDevice;
+
         if (type === "endDevice") {
           node = new EndDevice(id, name, xPos, yPos);
         } else {
-          node = new Router(id, name, xPos, yPos);
+          const rt = new RoutingTable();
+
+          const rawRt = raw.routingTable;
+          const rawEntries = rawRt?.entries;
+
+          if (Array.isArray(rawEntries)) {
+            for (const e of rawEntries) {
+              if (!e) continue;
+              const dest = String(e.destinationId ?? "").trim();
+              const hop = String(e.nextHopId ?? "").trim();
+              const cost = Number(e.cost ?? 0);
+
+              if (dest.length === 0 || hop.length === 0) continue;
+              if (!Number.isFinite(cost) || cost < 0) continue;
+
+              rt.entries.set(dest, new RoutingEntry(dest, hop, cost));
+            }
+          }
+
+          node = new Router(id, name, xPos, yPos, rt);
         }
+
         newTopology.nodes.set(id, node);
       }
     }
@@ -506,6 +527,7 @@ export class SimulationController {
     if (Array.isArray(data.events)) {
       for (const raw of data.events) {
         if (!raw) continue;
+
         const step: number = typeof raw.step === "number" ? raw.step : 0;
         const type: EventType = raw.type as EventType;
         const targetId: string = raw.targetId;
@@ -523,19 +545,38 @@ export class SimulationController {
   }
 
   public exportJson(): string {
-    const nodes = Array.from(this.topology.nodes.values()).map((n) => ({
-      id: n.id,
-      name: n.name,
-      xPos: n.xPos,
-      yPos: n.yPos,
-      type: n instanceof EndDevice ? "endDevice" : "router",
-    }));
+    const nodes = Array.from(this.topology.nodes.values()).map((n) => {
+      if (n instanceof Router) {
+        const rtEntries = Array.from(n.routingTable.entries.values()).map((e) => ({
+          destinationId: e.destinationId,
+          nextHopId: e.nextHopId,
+          cost: e.cost
+        }));
+
+        return {
+          id: n.id,
+          name: n.name,
+          xPos: n.xPos,
+          yPos: n.yPos,
+          type: "router",
+          routingTable: { entries: rtEntries }
+        };
+      }
+
+      return {
+        id: n.id,
+        name: n.name,
+        xPos: n.xPos,
+        yPos: n.yPos,
+        type: n instanceof EndDevice ? "endDevice" : "router"
+      };
+    });
 
     const links = this.topology.links.map((l) => ({
       id: l.id,
       sourceId: l.source.id,
       targetId: l.target.id,
-      weight: l.weight,
+      weight: l.weight
     }));
 
     const events: {
@@ -551,7 +592,7 @@ export class SimulationController {
           step: e.step,
           type: e.type,
           targetId: e.targetId,
-          argument: e.argument,
+          argument: e.argument
         });
       }
     }
@@ -562,7 +603,7 @@ export class SimulationController {
           step: e.step,
           type: e.type,
           targetId: e.targetId,
-          argument: e.argument,
+          argument: e.argument
         });
       }
     }

@@ -10,7 +10,11 @@
     setLinkWeight,
     clearNetwork,
     zoomInUI,
-    zoomOutUI
+    zoomOutUI,
+    canUndo,
+    canRedo,
+    undo,
+    redo
   } from '$lib/stores/simulation';
 
   $: controller = $simulation as any;
@@ -18,6 +22,9 @@
 
   $: currentMode = $placementMode;
   $: weightValue = $linkWeight;
+
+  $: canUndoNow = $canUndo;
+  $: canRedoNow = $canRedo;
 
   let showShortcuts = false;
 
@@ -79,6 +86,22 @@
 
   function closeShortcuts() {
     showShortcuts = false;
+  }
+
+  async function handleUndo() {
+    if (isRunning) {
+      await notify('Pause simulation before using undo/redo');
+      return;
+    }
+    undo();
+  }
+
+  async function handleRedo() {
+    if (isRunning) {
+      await notify('Pause simulation before using undo/redo');
+      return;
+    }
+    redo();
   }
 </script>
 
@@ -172,7 +195,7 @@
 
       {#if currentMode === 'delete'}
         <div style="margin-top: 6px; font-size: 11px; opacity: 0.75;">
-          Click a router or a link to delete it.
+          Drag-select multiple items in the canvas, then press Delete.
         </div>
       {/if}
 
@@ -185,6 +208,25 @@
   </div>
 
   <div class="left-panel-footer">
+    <div class="undo-row">
+      <button
+        class="zoom-btn"
+        title="Undo"
+        disabled={isRunning || !canUndoNow}
+        on:click={handleUndo}
+      >
+        ↶
+      </button>
+      <button
+        class="zoom-btn"
+        title="Redo"
+        disabled={isRunning || !canRedoNow}
+        on:click={handleRedo}
+      >
+        ↷
+      </button>
+    </div>
+
     <div class="zoom-row">
       <button class="zoom-btn" title="Zoom out UI" on:click={handleZoomOut}>
         🔍-
@@ -234,21 +276,33 @@
           </tr>
           <tr>
             <td><code>D</code></td>
-            <td>Toggle delete tool</td>
+            <td>Toggle delete tool (multi-select enabled)</td>
           </tr>
           <tr>
             <td><code>Del</code> / <code>Backspace</code></td>
-            <td>Delete selection (and toggle delete tool)</td>
+            <td>Delete selection</td>
           </tr>
           <tr>
             <td><code>Esc</code></td>
             <td>Exit tool mode</td>
           </tr>
+          <tr>
+            <td><code>Ctrl/Cmd + Z</code></td>
+            <td>Undo</td>
+          </tr>
+          <tr>
+            <td><code>Ctrl/Cmd + Y</code></td>
+            <td>Redo</td>
+          </tr>
+          <tr>
+            <td><code>Ctrl/Cmd + Shift + Z</code></td>
+            <td>Redo</td>
+          </tr>
         </tbody>
       </table>
 
       <div class="shortcuts-footnote">
-        Note: deleting / editing is blocked while the simulation is playing.
+        Note: editing and undo/redo are blocked while the simulation is playing.
       </div>
     </div>
   {/if}
@@ -258,6 +312,12 @@
   .palette-item--disabled {
     opacity: 0.55;
     pointer-events: none;
+  }
+
+  .undo-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
   }
 
   .shortcuts-backdrop {

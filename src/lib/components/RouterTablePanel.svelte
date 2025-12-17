@@ -4,13 +4,23 @@
     selectedRouterId,
     selectedEdgeId,
     setSelectedEdge,
-    updateLinkWeight
+    setSelectedRouter,
+    updateLinkWeight,
+    updateNodeName,
+    upsertRoutingEntry,
+    deleteRoutingEntry
   } from '$lib/stores/simulation';
 
   type RoutingEntryView = {
-    destination: string;
+    destinationId: string;
+    nextHopId: string;
     cost: number;
-    nextHop: string;
+  };
+
+  type NeighborView = {
+    linkId: string;
+    otherId: string;
+    weight: number;
   };
 
   $: controller = $simulation as any;
@@ -24,17 +34,23 @@
   $: selectedId = $selectedRouterId;
   $: edgeId = $selectedEdgeId;
 
-  function getRouterById(topology: any, id: string | null) {
-    if (!topology || !id) return null;
+  function getRouterById(topo: any, id: string | null): any | null {
+    if (!topo || !id) return null;
 
-    const rawNodes = topology.nodes;
+    const rawNodes = topo.nodes;
     const nodesArray = Array.isArray(rawNodes)
       ? rawNodes
       : rawNodes instanceof Map
         ? Array.from(rawNodes.values())
         : [];
 
-    return nodesArray.find((n: any) => n.id === id) ?? null;
+    return nodesArray.find((n: any) => String(n.id) === String(id)) ?? null;
+  }
+
+  function getLinkById(topo: any, id: string | null): any | null {
+    if (!topo || !id) return null;
+    const links: any[] = Array.isArray(topo.links) ? topo.links : [];
+    return links.find((l) => String(l.id) === String(id)) ?? null;
   }
 
   function extractRoutingEntries(router: any): RoutingEntryView[] {
@@ -45,29 +61,133 @@
     const rawEntries: any[] =
       entries instanceof Map ? Array.from(entries.values()) : Object.values(entries);
 
-    return rawEntries.map((e: any): RoutingEntryView => ({
-      destination: e.destinationId ?? e.destination ?? '',
-      cost: e.cost ?? 0,
-      nextHop: e.nextHopId ?? e.nextHop ?? ''
+    const mapped = rawEntries.map((e: any): RoutingEntryView => ({
+      destinationId: String(e.destinationId ?? ''),
+      nextHopId: String(e.nextHopId ?? ''),
+      cost: Number(e.cost ?? 0)
     }));
+
+    mapped.sort((a, b) => a.destinationId.localeCompare(b.destinationId));
+    return mapped;
   }
 
-  function getLinkById(topo: any, id: string | null): any | null {
-    if (!topo || !id) return null;
+  function getNeighbors(topo: any, routerId: string): NeighborView[] {
+    if (!topo || !routerId) return [];
     const links: any[] = Array.isArray(topo.links) ? topo.links : [];
-    return links.find((l) => String(l.id) === String(id)) ?? null;
+    const out: NeighborView[] = [];
+
+    for (const l of links) {
+      const sid = String(l?.source?.id ?? '');
+      const tid = String(l?.target?.id ?? '');
+      if (sid !== routerId && tid !== routerId) continue;
+
+      const other = sid === routerId ? tid : sid;
+      out.push({
+        linkId: String(l.id ?? ''),
+        otherId: other,
+        weight: Number(l.weight ?? 0)
+      });
+    }
+
+    out.sort((a, b) => a.otherId.localeCompare(b.otherId));
+    return out;
   }
 
   $: selectedRouter = getRouterById(topology, selectedId);
   $: routingEntries = selectedRouter ? extractRoutingEntries(selectedRouter) : [];
+  $: neighbors = selectedRouter ? getNeighbors(topology, String(selectedRouter.id)) : [];
 
   $: selectedLink = getLinkById(topology, edgeId);
-
   $: linkSourceId = selectedLink?.source?.id ?? '';
   $: linkTargetId = selectedLink?.target?.id ?? '';
   $: linkWeightValue = Number(selectedLink?.weight ?? 1);
 
-  function handleLinkWeightInput(event: Event) {
+  // Router editor local state
+  let routerNameDraft = '';
+  let nameDirty = false;
+
+  $: if (selectedRouter && !nameDirty) {
+    routerNameDraft = String(selectedRouter.name ?? selectedRouter.id ?? '');
+  }
+
+  function handleNameInput(event: Event) {
+    const el = event.currentTarget as HTMLInputElement;
+    routerNameDraft = el.value;
+    nameDirty = true;
+  }
+
+  function commitRouterName() {
+    if (!selectedRouter) return;
+    const trimmed = routerNameDraft.trim();
+    if (trimmed.length === 0) return;
+
+    updateNodeName(String(selectedRouter.id), trimmed);
+    nameDirty = false;
+  }
+
+  function handleNameKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      commitRouterName();
+    }
+    if (event.key === 'Escape') {
+      nameDirty = false;
+      routerNameDraft = String(selectedRouter?.name ?? selectedRouter?.id ?? '');
+    }
+  }
+
+  // Routing entry add form
+  let newDest = '';
+  let newNextHop = '';
+  let newCost = 1;
+
+  function addEntry() {
+    if (!selectedRouter) return;
+
+    const dest = newDest.trim();
+    const hop = newNextHop.trim();
+    const cost = Number(newCost);
+
+    if (dest.length === 0 || hop.length === 0) return;
+    if (!Number.isFinite(cost) || cost < 0) return;
+
+    upsertRoutingEntry(String(selectedRouter.id), dest, hop, cost);
+
+    newDest = '';
+    newNextHop = '';
+    newCost = 1;
+  }
+
+  function handleExistingHopChange(destinationId: string, event: Event) {
+    if (!selectedRouter) return;
+    const el = event.currentTarget as HTMLInputElement;
+    const hop = el.value.trim();
+    if (hop.length === 0) return;
+
+    const existing = routingEntries.find((e) => e.destinationId === destinationId);
+    const cost = existing ? existing.cost : 0;
+
+    upsertRoutingEntry(String(selectedRouter.id), destinationId, hop, cost);
+  }
+
+  function handleExistingCostChange(destinationId: string, event: Event) {
+    if (!selectedRouter) return;
+    const el = event.currentTarget as HTMLInputElement;
+    const cost = Number(el.value);
+    if (!Number.isFinite(cost) || cost < 0) return;
+
+    const existing = routingEntries.find((e) => e.destinationId === destinationId);
+    const hop = existing ? existing.nextHopId : '';
+
+    if (hop.trim().length === 0) return;
+    upsertRoutingEntry(String(selectedRouter.id), destinationId, hop, cost);
+  }
+
+  function removeEntry(destinationId: string) {
+    if (!selectedRouter) return;
+    deleteRoutingEntry(String(selectedRouter.id), destinationId);
+  }
+
+  function handleLinkWeightChange(event: Event) {
     if (!selectedLink) return;
     const el = event.currentTarget as HTMLInputElement;
     const w = Number(el.value);
@@ -75,8 +195,13 @@
     updateLinkWeight(String(selectedLink.id), w);
   }
 
-  function clearEdgeSelection() {
+  function closeEdgePanel() {
     setSelectedEdge(null);
+  }
+
+  function closeRouterPanel() {
+    setSelectedRouter(null);
+    nameDirty = false;
   }
 </script>
 
@@ -84,69 +209,171 @@
   class="router-table-panel"
   style="transform: scale(var(--uiScale, 1)); transform-origin: top right;"
 >
-  {#if selectedLink}
-    <h3>Link: {selectedLink.id}</h3>
-    <p style="margin: 0 0 8px 0; opacity: 0.85;">
-      {linkSourceId} ↔ {linkTargetId}
-    </p>
+  <!-- Router panel has priority over link panel -->
+  {#if selectedRouter}
+    <h3>Router: {selectedRouter.id}</h3>
 
-    <label style="display:block; font-size: 11px; opacity: 0.85; margin-bottom: 4px;">
-      Weight
-    </label>
-    <input
-      type="number"
-      min="1"
-      step="1"
-      value={linkWeightValue}
-      disabled={isRunning}
-      on:change={handleLinkWeightInput}
-      style="width: 100%; padding: 6px 8px; border-radius: 10px; border: 1px solid rgba(15,23,42,0.25);"
-    />
+    <div class="section">
+      <label class="field-label">Name</label>
+      <div class="row">
+        <input
+          class="field-input"
+          type="text"
+          value={routerNameDraft}
+          disabled={isRunning}
+          on:input={handleNameInput}
+          on:change={commitRouterName}
+          on:keydown={handleNameKeydown}
+        />
+        <button
+          class="btn-small-primary"
+          disabled={isRunning || routerNameDraft.trim().length === 0}
+          on:click={commitRouterName}
+        >
+          Save
+        </button>
+      </div>
 
-    {#if isRunning}
-      <p style="margin-top: 8px; font-size: 11px; opacity: 0.75;">
-        Pause simulation to edit weight.
+      <div class="meta">
+        <div><b>Position:</b> {Number(selectedRouter.xPos ?? 0).toFixed(1)} / {Number(selectedRouter.yPos ?? 0).toFixed(1)}</div>
+        <div style="margin-top: 4px;">
+          <b>Neighbors:</b>
+          {#if neighbors.length === 0}
+            none
+          {:else}
+            <ul class="neighbor-list">
+              {#each neighbors as n (n.linkId)}
+                <li class="mono">
+                  {n.otherId} (w={n.weight}) — {n.linkId}
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+      </div>
+
+      {#if isRunning}
+        <p class="hint">Pause simulation to edit router properties.</p>
+      {/if}
+    </div>
+
+    <div class="section">
+      <div class="section-title">Routing table</div>
+      <p class="hint" style="margin-top: 4px;">
+        Manual edits may be overwritten when you step/run the algorithm.
       </p>
-    {/if}
 
-    <button
-      class="btn-small-primary"
-      style="margin-top: 10px;"
-      on:click={clearEdgeSelection}
-    >
-      Close
-    </button>
-  {:else}
-    {#if selectedId}
-      <h3>Routing table: {selectedId}</h3>
       {#if routingEntries.length === 0}
-        <p>No entries.</p>
+        <p class="subtle">No entries.</p>
       {:else}
-        <table>
+        <table class="rt-table">
           <thead>
             <tr>
               <th>Destination</th>
-              <th>Cost</th>
               <th>Next hop</th>
+              <th>Cost</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            {#each routingEntries as entry}
+            {#each routingEntries as entry (entry.destinationId)}
               <tr>
-                <td>{entry.destination}</td>
-                <td>{entry.cost}</td>
-                <td>{entry.nextHop}</td>
+                <td class="mono">{entry.destinationId}</td>
+                <td>
+                  <input
+                    class="table-input mono"
+                    type="text"
+                    value={entry.nextHopId}
+                    disabled={isRunning}
+                    on:change={(e) => handleExistingHopChange(entry.destinationId, e)}
+                  />
+                </td>
+                <td>
+                  <input
+                    class="table-input"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={entry.cost}
+                    disabled={isRunning}
+                    on:change={(e) => handleExistingCostChange(entry.destinationId, e)}
+                  />
+                </td>
+                <td>
+                  <button
+                    class="btn-icon"
+                    title="Delete entry"
+                    disabled={isRunning}
+                    on:click={() => removeEntry(entry.destinationId)}
+                  >
+                    🗑
+                  </button>
+                </td>
               </tr>
             {/each}
           </tbody>
         </table>
       {/if}
-    {:else}
-      <p>Select a router to see its routing table.</p>
-      <p style="margin-top: 6px; opacity: 0.75;">
-        Click a link to edit its weight.
-      </p>
+
+      <div class="add-box">
+        <div class="section-title" style="margin-bottom: 6px;">Add / overwrite entry</div>
+
+        <label class="field-label">Destination</label>
+        <input class="field-input mono" type="text" bind:value={newDest} disabled={isRunning} />
+
+        <label class="field-label" style="margin-top: 8px;">Next hop</label>
+        <input class="field-input mono" type="text" bind:value={newNextHop} disabled={isRunning} />
+
+        <label class="field-label" style="margin-top: 8px;">Cost</label>
+        <input
+          class="field-input"
+          type="number"
+          min="0"
+          step="1"
+          bind:value={newCost}
+          disabled={isRunning}
+        />
+
+        <button
+          class="btn-small-primary"
+          style="margin-top: 10px; width: 100%;"
+          disabled={isRunning || newDest.trim().length === 0 || newNextHop.trim().length === 0}
+          on:click={addEntry}
+        >
+          Add / overwrite
+        </button>
+      </div>
+    </div>
+
+    <button class="btn-small-primary" style="margin-top: 10px;" on:click={closeRouterPanel}>
+      Close
+    </button>
+
+  {:else if selectedLink}
+    <h3>Link: {selectedLink.id}</h3>
+    <p class="subtle">{linkSourceId} ↔ {linkTargetId}</p>
+
+    <label class="field-label">Weight</label>
+    <input
+      class="field-input"
+      type="number"
+      min="1"
+      step="1"
+      value={linkWeightValue}
+      disabled={isRunning}
+      on:change={handleLinkWeightChange}
+    />
+
+    {#if isRunning}
+      <p class="hint">Pause simulation to edit weight.</p>
     {/if}
+
+    <button class="btn-small-primary" style="margin-top: 10px;" on:click={closeEdgePanel}>
+      Close
+    </button>
+
+  {:else}
+    <p>Select a router to edit its name/table, or click a link to edit its weight.</p>
   {/if}
 </div>
 
@@ -161,34 +388,121 @@
     background: rgba(223, 243, 255, 0.96);
     box-shadow: 0 8px 16px rgba(15, 23, 42, 0.15);
     font-size: 11px;
-    min-width: 260px;
+    min-width: 280px;
     overflow: auto;
     z-index: 10;
   }
 
-  .router-table-panel h3 {
+  h3 {
     font-size: 12px;
-    margin-bottom: 6px;
+    margin: 0 0 6px 0;
   }
 
-  .router-table-panel table {
+  .section {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(186, 230, 253, 0.9);
+  }
+
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .subtle {
+    margin: 0 0 8px 0;
+    opacity: 0.8;
+  }
+
+  .hint {
+    margin: 8px 0 0 0;
+    font-size: 11px;
+    opacity: 0.75;
+  }
+
+  .field-label {
+    display: block;
+    font-size: 11px;
+    opacity: 0.85;
+    margin-bottom: 4px;
+  }
+
+  .field-input {
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(15, 23, 42, 0.25);
+    background: rgba(255, 255, 255, 0.95);
+  }
+
+  .row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .row .field-input {
+    flex: 1;
+  }
+
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      'Liberation Mono', 'Courier New', monospace;
+  }
+
+  .meta {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    font-size: 11px;
+    color: #0f172a;
+  }
+
+  .neighbor-list {
+    margin: 4px 0 0 16px;
+    padding: 0;
+  }
+
+  .rt-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 11px;
+    margin-top: 6px;
   }
 
-  .router-table-panel th,
-  .router-table-panel td {
-    padding: 2px 4px;
+  .rt-table th,
+  .rt-table td {
+    padding: 4px 4px;
     text-align: left;
+    vertical-align: middle;
   }
 
-  .router-table-panel thead {
+  .rt-table thead {
     border-bottom: 1px solid #bae6fd;
   }
 
-  .router-table-panel tbody tr:nth-child(even) {
-    background: #e0f2fe;
+  .rt-table tbody tr:nth-child(even) {
+    background: rgba(224, 242, 254, 0.75);
+  }
+
+  .table-input {
+    width: 100%;
+    padding: 4px 6px;
+    border-radius: 8px;
+    border: 1px solid rgba(15, 23, 42, 0.18);
+    background: rgba(255, 255, 255, 0.95);
+    font-size: 11px;
+  }
+
+  .add-box {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(15, 23, 42, 0.08);
   }
 </style>
 

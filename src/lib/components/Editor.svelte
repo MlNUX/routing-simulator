@@ -18,7 +18,8 @@
     updateNodePositions,
     deleteLinkById,
     selectedEdgeId,
-    setSelectedEdge
+    setSelectedEdge,
+    setMultiSelection
   } from '$lib/stores/simulation';
 
   const { screenToFlowPosition } = useSvelteFlow();
@@ -120,6 +121,26 @@
     }
   }
 
+  $: mode = $placementMode;
+
+  // Multi-select only in delete mode: collect selected items from flow bindings
+  $: {
+    if (mode === 'delete') {
+      const selectedNodeIds = flowNodes
+        .filter((n) => !!n?.selected)
+        .map((n) => String(n.id));
+
+      const selectedEdgeIds = flowEdges
+        .filter((e) => !!e?.selected)
+        .map((e) => String(e.id));
+
+      setMultiSelection(selectedNodeIds, selectedEdgeIds);
+    } else {
+      setMultiSelection([], []);
+    }
+  }
+
+  // Persist node positions after drag end
   $: {
     if (isRunning) {
       prevDragging.clear();
@@ -183,8 +204,6 @@
     );
   }
 
-  $: mode = $placementMode;
-
   function handlePaneClick() {
     setSelectedEdge(null);
   }
@@ -211,7 +230,19 @@
     setSelectedEdge(edgeId);
   }
 
-  // Router placement
+  // ------------------- Snap-to-grid -------------------
+  const SNAP = 20;
+
+  function snapValue(v: number): number {
+    return Math.round(v / SNAP) * SNAP;
+  }
+
+  function snapPoint(p: { x: number; y: number }): { x: number; y: number } {
+    return { x: snapValue(p.x), y: snapValue(p.y) };
+  }
+
+  // ------------------- Router placement -------------------
+
   let isPlacing = false;
   let previewX = 0;
   let previewY = 0;
@@ -244,7 +275,9 @@
     if (!isPlacing) return;
 
     const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-    addNode(flowPos.x, flowPos.y);
+    const snapped = snapPoint(flowPos);
+
+    addNode(snapped.x, snapped.y);
 
     isPlacing = false;
     clearPlacementMode();
@@ -272,6 +305,9 @@
     nodeOrigin={[0.5, 0.5]}
     fitView
     nodesDraggable={!isRunning}
+    snapToGrid={true}
+    snapGrid={[20, 20]}
+    selectionOnDrag={mode === 'delete'}
     defaultEdgeOptions={{ selectable: true, interactionWidth: 32 }}
     on:nodedragstop={handleNodeDragStop}
     on:selectiondragstop={handleSelectionDragStop}
@@ -279,7 +315,7 @@
     onedgeclick={handleEdgeClick}
     on:paneClick={handlePaneClick}
   >
-    <Background />
+    <Background variant="dots" gap={20} size={1} />
   </SvelteFlow>
 
   {#if mode === 'link'}
@@ -294,7 +330,7 @@
 
   {#if mode === 'delete'}
     <div class="tool-hint">
-      Delete tool: click a router or a link to delete it.
+      Delete tool: click a router/link to delete, or drag-select multiple and press Delete.
     </div>
   {/if}
 
@@ -341,11 +377,14 @@
     pointer-events: none;
   }
 
+  /* Selected link color */
   :global(.edge-selected path) {
+    stroke: #f97316;
     stroke-width: 4px;
   }
 
   :global(.edge-selected text) {
+    fill: #f97316;
     font-weight: 700;
   }
 </style>
