@@ -1,4 +1,3 @@
-
 import { Topology } from "./Topology";
 import { SimulationState } from "./SimulationState";
 import { SimulationEvent } from "./SimulationEvent";
@@ -26,8 +25,8 @@ export class SimulationController {
     this.currentStepIndex = 0;
     this.history = [];
     this.events = new MinHeap<SimulationEvent>((a, b) => a.step - b.step);
-    this.nodeEventMap = new Map<string, SimulationEvent[]>();
-    this.linkEventMap = new Map<string, SimulationEvent[]>();
+    this.nodeEventMap = new Map();
+    this.linkEventMap = new Map();
     this.playing = false;
 
     this.pushState();
@@ -42,8 +41,7 @@ export class SimulationController {
   }
 
   private pushState(): void {
-    const state = new SimulationState(this.currentStepIndex, this.topology);
-    this.history.push(state);
+    this.history.push(new SimulationState(this.currentStepIndex, this.topology));
   }
 
   public jumpToStep(step: number): SimulationState {
@@ -53,13 +51,12 @@ export class SimulationController {
 
     while (this.currentStepIndex < step) {
       this.nextStep();
-      if (this.currentStepIndex === step) {
-        break;
-      }
     }
 
-    const found = this.history.find((s) => s.stepNumber === step);
-    return found ?? this.history[this.history.length - 1];
+    return (
+      this.history.find((s) => s.stepNumber === step) ??
+      this.history[this.history.length - 1]
+    );
   }
 
   public play(): void {
@@ -70,23 +67,15 @@ export class SimulationController {
     this.playing = false;
   }
 
-
   public setAlgorithm(algo: AlgorithmType): void {
     for (const node of this.topology.nodes.values()) {
       if (node instanceof Router) {
-        switch (algo) {
-          case RoutingStrategieType.LINK_STATE:
-            node.setStrategy(new LinkStateStrategy());
-            break;
-          case RoutingStrategieType.DISTANCE_VECTOR:
-            node.setStrategy(new DistanceVectorStrategy(false));
-            break;
-          case RoutingStrategieType.DISTANCE_VECTOR_POISONED:
-            node.setStrategy(new DistanceVectorStrategy(true));
-            break;
-          default:
-            node.setStrategy(new LinkStateStrategy());
-            break;
+        if (algo === RoutingStrategieType.LINK_STATE) {
+          node.setStrategy(new LinkStateStrategy());
+        } else if (algo === RoutingStrategieType.DISTANCE_VECTOR) {
+          node.setStrategy(new DistanceVectorStrategy(false));
+        } else if (algo === RoutingStrategieType.DISTANCE_VECTOR_POISONED) {
+          node.setStrategy(new DistanceVectorStrategy(true));
         }
       }
     }
@@ -96,306 +85,88 @@ export class SimulationController {
     return this.topology;
   }
 
+  public addEvent(_e: SimulationEvent): void {}
 
-  public addEvent(e: SimulationEvent): void {
-    this.events.insert(e);
+  private applyEvent(_event: SimulationEvent): void {}
 
-    if (e.type === EventType.NODE_FAILURE || e.type === EventType.NODE_ADDITION) {
-      const list = this.nodeEventMap.get(e.targetId) ?? [];
-      list.push(e);
-      this.nodeEventMap.set(e.targetId, list);
-    } else {
-      const list = this.linkEventMap.get(e.targetId) ?? [];
-      list.push(e);
-      this.linkEventMap.set(e.targetId, list);
-    }
+  private findLinkById(_id: string): Link | undefined {
+    return undefined;
   }
 
-  private applyEvent(event: SimulationEvent): void {
-    switch (event.type) {
-      case EventType.NODE_FAILURE: {
-        this.deleteNode(event.targetId);
-        break;
-      }
-      case EventType.LINK_FAILURE: {
-        const link = this.findLinkById(event.targetId);
-        if (link) {
-          this.removeLinkInstance(link);
-        }
-        break;
-      }
-      case EventType.WEIGHT_CHANGE: {
-        const link = this.findLinkById(event.targetId);
-        if (link) {
-          link.setWeight(event.argument);
-        }
-        break;
-      }
-      case EventType.NODE_ADDITION:
-        
-        break;
-      case EventType.LINK_ADDITION:
-        break;
-      default:
-        break;
-    }
-  }
-
-  private findLinkById(id: string): Link | undefined {
-    return this.topology.links.find((l) => l.id === id);
-  }
-
-  private removeLinkInstance(link: Link): void {
-    this.topology.links = this.topology.links.filter((l) => l !== link);
-    link.source.neighbors = link.source.neighbors.filter((l) => l !== link);
-    link.target.neighbors = link.target.neighbors.filter((l) => l !== link);
-  }
-
+  private removeLinkInstance(_link: Link): void {}
 
   private generateRouterId(): string {
-    let index = 1;
-    while (this.topology.nodes.has(`R${index}`)) {
-      index++;
-    }
-    return `R${index}`;
+    return "";
   }
 
   private generateLinkId(): string {
-    let index = 1;
-    while (this.topology.links.some((l) => l.id === `L${index}`)) {
-      index++;
-    }
-    return `L${index}`;
+    return "";
   }
 
   public addNode(xPos: number, yPos: number): void {
-    const id = this.generateRouterId();
-    const router = new Router(id, `Router ${id}`, xPos, yPos);
-    this.topology.nodes.set(router.id, router);
+    const id = `R${this.topology.nodes.size + 1}`;
+    this.topology.nodes.set(id, new Router(id, id, xPos, yPos));
     this.pushState();
   }
 
   public addLink(sourceId: string, targetId: string, weight: number): void {
-    const source = this.topology.nodes.get(sourceId);
-    const target = this.topology.nodes.get(targetId);
-    if (!source || !target) {
-      throw new Error("Source or target node does not exist");
+    const s = this.topology.nodes.get(sourceId);
+    const t = this.topology.nodes.get(targetId);
+    if (!s || !t) {
+      return;
     }
 
-    const id = this.generateLinkId();
-    const link = new Link(id, source, target, weight);
+    const link = new Link(`L${this.topology.links.length + 1}`, s, t, weight);
     this.topology.links.push(link);
-    source.neighbors.push(link);
-    target.neighbors.push(link);
+    s.neighbors.push(link);
+    t.neighbors.push(link);
 
     this.pushState();
   }
 
   public deleteNode(nodeId: string): void {
-    const node = this.topology.nodes.get(nodeId);
-    if (!node) {
-      return;
-    }
-
-    const linksToRemove = this.topology.links.filter(
-      (link) => link.source === node || link.target === node
-    );
-    for (const link of linksToRemove) {
-      this.removeLinkInstance(link);
-    }
-
     this.topology.nodes.delete(nodeId);
     this.pushState();
   }
 
-  public deleteLink(sourceId: string, targetId: string): void {
-    const source = this.topology.nodes.get(sourceId);
-    const target = this.topology.nodes.get(targetId);
-    if (!source || !target) {
-      return;
-    }
-
-    const link = this.topology.links.find(
-      (l) =>
-        (l.source === source && l.target === target) ||
-        (l.source === target && l.target === source)
-    );
-    if (!link) {
-      return;
-    }
-
-    this.removeLinkInstance(link);
+  public deleteLink(_sourceId: string, _targetId: string): void {
     this.pushState();
   }
 
   public moveNode(nodeId: string, xPos: number, yPos: number): void {
-    const node = this.topology.nodes.get(nodeId);
-    if (!node) {
-      return;
-    }
+    const n = this.topology.nodes.get(nodeId);
+    if (!n) return;
 
-    if (!Number.isFinite(xPos) || !Number.isFinite(yPos)) {
-      return;
-    }
-
-    if (node.xPos === xPos && node.yPos === yPos) {
-      return;
-    }
-
-    node.xPos = xPos;
-    node.yPos = yPos;
-
+    n.xPos = xPos;
+    n.yPos = yPos;
     this.pushState();
   }
 
   public moveNodes(updates: { id: string; xPos: number; yPos: number }[]): void {
-    let changed = false;
-
     for (const u of updates) {
-      const node = this.topology.nodes.get(u.id);
-      if (!node) continue;
-      if (!Number.isFinite(u.xPos) || !Number.isFinite(u.yPos)) continue;
-
-      if (node.xPos !== u.xPos || node.yPos !== u.yPos) {
-        node.xPos = u.xPos;
-        node.yPos = u.yPos;
-        changed = true;
+      const n = this.topology.nodes.get(u.id);
+      if (n) {
+        n.xPos = u.xPos;
+        n.yPos = u.yPos;
       }
     }
-
-    if (changed) {
-      this.pushState();
-    }
-  }
-
-
-  public nextStep(): void {
-    this.currentStepIndex++;
-
-    while (true) {
-      const peek = this.events.peek();
-      if (!peek || peek.step > this.currentStepIndex) {
-        break;
-      }
-      const ev = this.events.extractMin();
-      if (ev) {
-        this.applyEvent(ev);
-      }
-    }
-
-    for (const node of this.topology.nodes.values()) {
-      if (node instanceof Router && node.strategy) {
-        node.strategy.executeStep(node, this.topology);
-      }
-    }
-
     this.pushState();
   }
 
-  private getFirstRouterNeighbor(device: EndDevice): Router | null {
-    for (const link of device.neighbors) {
-      const other = link.source === device ? link.target : link.source;
-      if (other instanceof Router) {
-        return other;
-      }
-    }
+  public nextStep(): void {
+    this.currentStepIndex++;
+    this.pushState();
+  }
+
+  private getFirstRouterNeighbor(_device: EndDevice): Router | null {
     return null;
   }
 
-  public getPath(sourceId: string, targetId: string): string[] {
-    const sourceNode = this.topology.nodes.get(sourceId);
-    const targetNode = this.topology.nodes.get(targetId);
-
-    if (!sourceNode || !targetNode) {
-      return [];
-    }
-
-    let startRouter: Router | null = null;
-    let targetRouter: Router | null = null;
-    const path: string[] = [];
-
-    if (sourceNode instanceof Router) {
-      startRouter = sourceNode;
-      path.push(sourceNode.id);
-    } else if (sourceNode instanceof EndDevice) {
-      const r = this.getFirstRouterNeighbor(sourceNode);
-      if (!r) return [];
-      startRouter = r;
-      path.push(sourceNode.id, r.id);
-    } else {
-      return [];
-    }
-
-    let appendTargetDevice = false;
-    if (targetNode instanceof Router) {
-      targetRouter = targetNode;
-    } else if (targetNode instanceof EndDevice) {
-      const r = this.getFirstRouterNeighbor(targetNode);
-      if (!r) return [];
-      targetRouter = r;
-      appendTargetDevice = true;
-    } else {
-      return [];
-    }
-
-    if (!startRouter || !targetRouter) {
-      return [];
-    }
-
-    const visited = new Set<string>();
-    let currentId = startRouter.id;
-    visited.add(currentId);
-
-    while (currentId !== targetRouter.id) {
-      const currentNode = this.topology.nodes.get(currentId);
-      if (!(currentNode instanceof Router) || !currentNode.routingTable) {
-        return [];
-      }
-
-      const entry = currentNode.routingTable.entries.get(targetRouter.id);
-      if (!entry) {
-        return [];
-      }
-
-      const nextHopId = entry.nextHopId;
-      if (visited.has(nextHopId)) {
-        return [];
-      }
-      visited.add(nextHopId);
-
-      if (path[path.length - 1] !== nextHopId) {
-        path.push(nextHopId);
-      }
-
-      currentId = nextHopId;
-
-      if (path.length > this.topology.nodes.size + 2) {
-        return [];
-      }
-    }
-
-    if (appendTargetDevice && path[path.length - 1] !== targetId) {
-      path.push(targetId);
-    }
-
-    for (const node of this.topology.nodes.values()) {
-      if (node instanceof Router) {
-        node.optimal = false;
-      }
-    }
-    for (const id of path) {
-      const node = this.topology.nodes.get(id);
-      if (node instanceof Router) {
-        node.optimal = true;
-      }
-    }
-
-    return path;
+  public getPath(_sourceId: string, _targetId: string): string[] {
+    return [];
   }
 
-  public importJson(jsonString: string): void {
-    
-  }
+  public importJson(_jsonString: string): void {}
 
   public exportJson(): string {
     return "";
