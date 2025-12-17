@@ -1,4 +1,3 @@
-// src/lib/stores/simulation.ts
 import { writable, get } from 'svelte/store';
 
 import { SimulationController } from './SimulationController';
@@ -10,10 +9,6 @@ import type { Node } from './Node';
 import { Router } from './Router';
 import { Link } from './Link';
 import { RoutingTable } from './RoutingTable';
-
-// ---------------------------------------------------------------------------
-// Sample topology for testing (3 routers in a line: R1 - R2 - R3)
-// ---------------------------------------------------------------------------
 
 function createSampleTopology(): Topology {
   const nodes = new Map<string, Node>();
@@ -41,7 +36,6 @@ function createSampleTopology(): Topology {
   const l1 = new Link('L1', r1, r2, 1);
   const l2 = new Link('L2', r2, r3, 1);
 
-  // IMPORTANT: initialize neighbors for algorithms
   r1.neighbors.push(l1);
   r2.neighbors.push(l1);
 
@@ -53,21 +47,10 @@ function createSampleTopology(): Topology {
   return new Topology(nodes, links);
 }
 
-// ---------------------------------------------------------------------------
-// Main simulation store: single SimulationController instance
-// ---------------------------------------------------------------------------
+
 
 export const simulation = writable(new SimulationController(createSampleTopology()));
-
-// ---------------------------------------------------------------------------
-// Router selection state
-// ---------------------------------------------------------------------------
-
 export const selectedRouterId = writable<string | null>(null);
-
-// ---------------------------------------------------------------------------
-// Placement / tool mode
-// ---------------------------------------------------------------------------
 
 export type PlacementMode = 'none' | 'router' | 'link';
 export const placementMode = writable<PlacementMode>('none');
@@ -111,10 +94,6 @@ export function clearPlacementMode(): void {
   clearLinkSelection();
 }
 
-// ---------------------------------------------------------------------------
-// Selection behavior
-// ---------------------------------------------------------------------------
-
 export function setSelectedRouter(id: string | null): void {
   selectedRouterId.set(id);
 
@@ -154,9 +133,6 @@ export function setSelectedRouter(id: string | null): void {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Control of the simulation (playback etc.)
-// ---------------------------------------------------------------------------
 
 export function play(): void {
   simulation.update((controller) => {
@@ -223,10 +199,6 @@ export function reset(): void {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Topology operations
-// ---------------------------------------------------------------------------
-
 export function addNode(xPos: number, yPos: number): void {
   simulation.update((controller) => {
     controller.addNode(xPos, yPos);
@@ -255,8 +227,6 @@ export function deleteLink(sourceId: string, targetId: string): void {
   });
 }
 
-// ------------------------------ NEW: movement -------------------------------
-
 export function updateNodePosition(nodeId: string, xPos: number, yPos: number): void {
   simulation.update((controller) => {
     controller.moveNode(nodeId, xPos, yPos);
@@ -273,20 +243,12 @@ export function updateNodePositions(
   });
 }
 
-// ---------------------------------------------------------------------------
-// Events
-// ---------------------------------------------------------------------------
-
 export function addEvent(event: SimulationEvent): void {
   simulation.update((controller) => {
     controller.addEvent(event);
     return controller;
   });
 }
-
-// ---------------------------------------------------------------------------
-// Queries / helpers
-// ---------------------------------------------------------------------------
 
 export function getTopology(): Topology {
   let topology!: Topology;
@@ -305,10 +267,6 @@ export function getPath(sourceId: string, targetId: string): string[] {
   });
   return path;
 }
-
-// ---------------------------------------------------------------------------
-// Import / Export
-// ---------------------------------------------------------------------------
 
 export function importJson(json: string): void {
   simulation.update((controller) => {

@@ -1,4 +1,3 @@
-// src/lib/stores/SimulationController.ts
 
 import { Topology } from "./Topology";
 import { SimulationState } from "./SimulationState";
@@ -13,7 +12,6 @@ import { LinkStateStrategy } from "./LinkStateStrategy";
 import { DistanceVectorStrategy } from "./DistanceVectorStrategy";
 
 export class SimulationController {
-  // made public so Svelte can bind directly (Timeline, Editor, etc.)
   public currentStepIndex: number;
   public history: SimulationState[];
   public topology: Topology;
@@ -35,7 +33,6 @@ export class SimulationController {
     this.pushState();
   }
 
-  // convenience getters for UI
   public get running(): boolean {
     return this.playing;
   }
@@ -43,8 +40,6 @@ export class SimulationController {
   public get isPlaying(): boolean {
     return this.playing;
   }
-
-  // ----------------------------- Basis / Timeline ----------------------------
 
   private pushState(): void {
     const state = new SimulationState(this.currentStepIndex, this.topology);
@@ -56,7 +51,6 @@ export class SimulationController {
       step = 0;
     }
 
-    // only simulate forward if needed
     while (this.currentStepIndex < step) {
       this.nextStep();
       if (this.currentStepIndex === step) {
@@ -76,7 +70,6 @@ export class SimulationController {
     this.playing = false;
   }
 
-  // -------------------------- Routing-Algorithmus ---------------------------
 
   public setAlgorithm(algo: AlgorithmType): void {
     for (const node of this.topology.nodes.values()) {
@@ -103,7 +96,6 @@ export class SimulationController {
     return this.topology;
   }
 
-  // ------------------------------- Events ------------------------------------
 
   public addEvent(e: SimulationEvent): void {
     this.events.insert(e);
@@ -140,10 +132,9 @@ export class SimulationController {
         break;
       }
       case EventType.NODE_ADDITION:
-        // not clearly specified -> no-op for now
+        
         break;
       case EventType.LINK_ADDITION:
-        // not clearly specified -> no-op for now
         break;
       default:
         break;
@@ -160,7 +151,6 @@ export class SimulationController {
     link.target.neighbors = link.target.neighbors.filter((l) => l !== link);
   }
 
-  // ------------------------ Topologie verändern ------------------------------
 
   private generateRouterId(): string {
     let index = 1;
@@ -238,8 +228,6 @@ export class SimulationController {
     this.pushState();
   }
 
-  // -------------------------- NEW: Persist node movement ---------------------
-
   public moveNode(nodeId: string, xPos: number, yPos: number): void {
     const node = this.topology.nodes.get(nodeId);
     if (!node) {
@@ -250,7 +238,6 @@ export class SimulationController {
       return;
     }
 
-    // Avoid pushing duplicate states (also avoids double-events from multiple listeners)
     if (node.xPos === xPos && node.yPos === yPos) {
       return;
     }
@@ -281,12 +268,10 @@ export class SimulationController {
     }
   }
 
-  // ---------------------------- Simulationsschritt ---------------------------
 
   public nextStep(): void {
     this.currentStepIndex++;
 
-    // handle all events scheduled for this step
     while (true) {
       const peek = this.events.peek();
       if (!peek || peek.step > this.currentStepIndex) {
@@ -298,7 +283,6 @@ export class SimulationController {
       }
     }
 
-    // execute routing strategy for all routers
     for (const node of this.topology.nodes.values()) {
       if (node instanceof Router && node.strategy) {
         node.strategy.executeStep(node, this.topology);
@@ -307,8 +291,6 @@ export class SimulationController {
 
     this.pushState();
   }
-
-  // ------------------------- Pfad anhand Routingtabellen ---------------------
 
   private getFirstRouterNeighbor(device: EndDevice): Router | null {
     for (const link of device.neighbors) {
@@ -332,7 +314,6 @@ export class SimulationController {
     let targetRouter: Router | null = null;
     const path: string[] = [];
 
-    // start
     if (sourceNode instanceof Router) {
       startRouter = sourceNode;
       path.push(sourceNode.id);
@@ -345,7 +326,6 @@ export class SimulationController {
       return [];
     }
 
-    // target
     let appendTargetDevice = false;
     if (targetNode instanceof Router) {
       targetRouter = targetNode;
@@ -413,124 +393,12 @@ export class SimulationController {
     return path;
   }
 
-  // ------------------------------ JSON Import/Export -------------------------
-
   public importJson(jsonString: string): void {
-    const data = JSON.parse(jsonString);
-
-    const newTopology = new Topology();
-
-    if (Array.isArray(data.nodes)) {
-      for (const raw of data.nodes) {
-        if (!raw || typeof raw.id !== "string") {
-          continue;
-        }
-        const id: string = raw.id;
-        const name: string = raw.name ?? raw.id;
-        const xPos: number = typeof raw.xPos === "number" ? raw.xPos : 0;
-        const yPos: number = typeof raw.yPos === "number" ? raw.yPos : 0;
-        const type: string = raw.type ?? "router";
-
-        let node: Router | EndDevice;
-        if (type === "endDevice") {
-          node = new EndDevice(id, name, xPos, yPos);
-        } else {
-          node = new Router(id, name, xPos, yPos);
-        }
-        newTopology.nodes.set(id, node);
-      }
-    }
-
-    if (Array.isArray(data.links)) {
-      for (const raw of data.links) {
-        if (!raw) continue;
-        const id: string = raw.id ?? "";
-        const sourceId: string = raw.sourceId;
-        const targetId: string = raw.targetId;
-        const weight: number = typeof raw.weight === "number" ? raw.weight : 1;
-
-        const source = newTopology.nodes.get(sourceId);
-        const target = newTopology.nodes.get(targetId);
-        if (!source || !target) continue;
-
-        const link = new Link(id, source, target, weight);
-        newTopology.links.push(link);
-        source.neighbors.push(link);
-        target.neighbors.push(link);
-      }
-    }
-
-    this.topology = newTopology;
-
-    this.events = new MinHeap<SimulationEvent>((a, b) => a.step - b.step);
-    this.nodeEventMap = new Map<string, SimulationEvent[]>();
-    this.linkEventMap = new Map<string, SimulationEvent[]>();
-
-    if (Array.isArray(data.events)) {
-      for (const raw of data.events) {
-        if (!raw) continue;
-        const step: number = typeof raw.step === "number" ? raw.step : 0;
-        const type: EventType = raw.type as EventType;
-        const targetId: string = raw.targetId;
-        const argument: number = typeof raw.argument === "number" ? raw.argument : 0;
-
-        const e = new SimulationEvent(step, type, targetId, argument);
-        this.addEvent(e);
-      }
-    }
-
-    this.currentStepIndex = 0;
-    this.history = [];
-    this.playing = false;
-    this.pushState();
+    
   }
 
   public exportJson(): string {
-    const nodes = Array.from(this.topology.nodes.values()).map((n) => ({
-      id: n.id,
-      name: n.name,
-      xPos: n.xPos,
-      yPos: n.yPos,
-      type: n instanceof EndDevice ? "endDevice" : "router",
-    }));
-
-    const links = this.topology.links.map((l) => ({
-      id: l.id,
-      sourceId: l.source.id,
-      targetId: l.target.id,
-      weight: l.weight,
-    }));
-
-    const events: {
-      step: number;
-      type: EventType;
-      targetId: string;
-      argument: number;
-    }[] = [];
-
-    for (const list of this.nodeEventMap.values()) {
-      for (const e of list) {
-        events.push({
-          step: e.step,
-          type: e.type,
-          targetId: e.targetId,
-          argument: e.argument,
-        });
-      }
-    }
-
-    for (const list of this.linkEventMap.values()) {
-      for (const e of list) {
-        events.push({
-          step: e.step,
-          type: e.type,
-          targetId: e.targetId,
-          argument: e.argument,
-        });
-      }
-    }
-
-    return JSON.stringify({ nodes, links, events }, null, 2);
+    return "";
   }
 }
 

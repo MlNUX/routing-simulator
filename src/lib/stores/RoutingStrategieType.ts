@@ -4,5 +4,5 @@ export enum RoutingStrategieType {
   DISTANCE_VECTOR_POISONED = "DISTANCE_VECTOR_POISONED",
 }
 
-// Alias used by SimulationController#setAlgorithm according to the UML
+
 export type AlgorithmType = RoutingStrategieType;

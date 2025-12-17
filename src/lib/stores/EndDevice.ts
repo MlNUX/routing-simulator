@@ -7,10 +7,10 @@ export class EndDevice extends Node {
   }
 
   public receivePacket(_p: Packet): void {
-    // unknown behaviour -> left empty on purpose
+    
   }
 
   public sendPacket(_p: Packet, _target: string): void {
-    // unknown behaviour -> left empty on purpose
+    
   }
 }

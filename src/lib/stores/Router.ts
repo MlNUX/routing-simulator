@@ -18,14 +18,14 @@ export class Router extends Node {
   }
 
   public executeRoutingStep(): void {
-    // unknown behaviour -> left empty on purpose
+    
   }
 
   public receivePacket(_p: Packet): void {
-    // unknown behaviour -> left empty on purpose
+   
   }
 
   public sendPacket(_p: Packet, _target: string): void {
-    // unknown behaviour -> left empty on purpose
+    
   }
 }
