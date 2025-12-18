@@ -41,7 +41,7 @@
     <!-- stop -->
     <button
       class="w-9 h-9 bg-primary text-white cursor-pointer text-base border-none rounded-xl
-      flex items-center justify-center"
+      flex items-center justify-center hover:brightness-110"
       on:click={handleStop}
     >
       <img src="/icons/stop.svg" alt="Stop">
@@ -50,7 +50,7 @@
     <!-- one step backward -->
     <button
       class="w-9 h-9 bg-primary text-white cursor-pointer text-base border-none rounded-xl
-      flex items-center justify-center"
+      flex items-center justify-center hover:brightness-110"
       on:click={stepBackward}
     >
       <img src="/icons/step-back.svg" alt="Step backward">
@@ -59,7 +59,7 @@
     <!-- play -->
     <button
       class="w-9 h-9 bg-primary text-white cursor-pointer text-base border-none rounded-xl
-      flex items-center justify-center"
+      flex items-center justify-center hover:brightness-110"
       on:click={handlePlay}
       disabled={isPlaying}
     >
@@ -70,7 +70,7 @@
     <!-- pause -->
     <button
       class="w-9 h-9 bg-primary text-white cursor-pointer text-base border-none rounded-xl
-      flex items-center justify-center"
+      flex items-center justify-center hover:brightness-110"
       on:click={handlePause}
       disabled={!isPlaying}
     >
@@ -80,7 +80,7 @@
     <!-- one step forward -->
     <button
       class="w-9 h-9 bg-primary text-white cursor-pointer text-base border-none rounded-xl
-      flex items-center justify-center"
+      flex items-center justify-center hover:brightness-110"
       on:click={stepForward}
     >
       <img src="/icons/step-front.svg" alt="Step forward">
@@ -89,7 +89,7 @@
     <!-- reset -->
     <button
       class="w-9 h-9 bg-primary text-white cursor-pointer text-base border-none rounded-xl
-      flex items-center justify-center"
+      flex items-center justify-center hover:brightness-110"
       on:click={handleReset}
     >
       <img src="/icons/reload.svg" alt="Reset">
