@@ -355,7 +355,13 @@ export class SimulationController {
     const step0Events = this.getRawEventsForStep(0);
     this.applyEventsToTopology(step0Topo, step0Events);
     this.initializeRoutingTablesBlank(step0Topo);
-    this.markRoutersPre(step0Topo);
+
+    // IMPORTANT:
+    // At step 0, we still want the UI to show whether routing tables are consistent with reachability.
+    // - No neighbors => everything unreachable => tables with ∞ are correct => green
+    // - First time wired up (reachable exists) but tables still ∞ until PLAY => mismatch => red
+    this.markOptimalityAgainstDijkstra(step0Topo);
+
     states.push(new SimulationState(0, step0Topo, step0Events));
 
     for (let step = 1; step < this.totalSteps; step++) {
