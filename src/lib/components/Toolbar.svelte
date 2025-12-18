@@ -2,12 +2,16 @@
   import { notify } from '$lib/notify';
   import {
     setAlgorithm,
+    resetToInitialAndSetAlgorithm,
     exportJson as exportSimulationJson,
     importJson as importSimulationJson,
     simulation,
-    warningMessage
+    warningMessage,
+    openRouterHistoryFromToolbar
   } from '$lib/stores/simulation';
   import { RoutingStrategieType } from '$lib/stores/RoutingStrategieType';
+
+  import DebugConsoleModal from '$lib/components/DebugConsoleModal.svelte';
 
   type AlgorithmSelection = 'link' | 'distance' | 'distancePoisoned';
 
@@ -16,6 +20,7 @@
 
   // Scenario modal
   let showScenarioModal = false;
+  let showDebugModal = false;
 
   type ScenarioEntry = {
     name: string;
@@ -43,32 +48,76 @@
     return entries;
   }
 
-  function currentAlgoType(): RoutingStrategieType {
-    if (selected === 'distance') {
-      return RoutingStrategieType.DISTANCE_VECTOR;
-    }
-    if (selected === 'distancePoisoned') {
-      return RoutingStrategieType.DISTANCE_VECTOR_POISONED;
-    }
+  function algoToSelection(algo: string): AlgorithmSelection {
+    if (algo === RoutingStrategieType.DISTANCE_VECTOR) return 'distance';
+    if (algo === RoutingStrategieType.DISTANCE_VECTOR_POISONED) return 'distancePoisoned';
+    return 'link';
+  }
+
+  function selectedToAlgo(sel: AlgorithmSelection): RoutingStrategieType {
+    if (sel === 'distance') return RoutingStrategieType.DISTANCE_VECTOR;
+    if (sel === 'distancePoisoned') return RoutingStrategieType.DISTANCE_VECTOR_POISONED;
     return RoutingStrategieType.LINK_STATE;
   }
 
+  function readAlgoFromController(): string {
+    const ctrl = $simulation as any;
+    if (ctrl && typeof ctrl.getAlgorithm === 'function') {
+      return String(ctrl.getAlgorithm());
+    }
+    return String(ctrl?.algorithm ?? RoutingStrategieType.LINK_STATE);
+  }
+
+  function syncSelectedToImportedAlgorithm(): void {
+    selected = algoToSelection(readAlgoFromController());
+  }
+
+  function totalStepsNow(): number {
+    const ctrl = $simulation as any;
+    if (ctrl && typeof ctrl.getTotalSteps === 'function') {
+      return Number(ctrl.getTotalSteps());
+    }
+    return Number(ctrl?.totalSteps ?? 1);
+  }
+
+  async function applyAlgorithm(
+    nextSelected: AlgorithmSelection,
+    algo: RoutingStrategieType,
+    label: string
+  ) {
+    const steps = totalStepsNow();
+
+    if (typeof window !== 'undefined' && steps > 1) {
+      const ok = window.confirm(
+        'Changing the routing algorithm will reset the simulation to the original topology and delete all steps and edits. Continue?'
+      );
+      if (!ok) {
+        return;
+      }
+
+      resetToInitialAndSetAlgorithm(algo);
+    } else {
+      setAlgorithm(algo);
+    }
+
+    selected = nextSelected;
+    await notify(`${label} algorithm selected`);
+  }
+
   async function selectLinkState() {
-    selected = 'link';
-    setAlgorithm(RoutingStrategieType.LINK_STATE);
-    await notify('Link-State algorithm selected');
+    await applyAlgorithm('link', RoutingStrategieType.LINK_STATE, 'Link-State');
   }
 
   async function selectDistanceVector() {
-    selected = 'distance';
-    setAlgorithm(RoutingStrategieType.DISTANCE_VECTOR);
-    await notify('Distance-Vector algorithm selected');
+    await applyAlgorithm('distance', RoutingStrategieType.DISTANCE_VECTOR, 'Distance-Vector');
   }
 
   async function selectDistanceVectorPoisoned() {
-    selected = 'distancePoisoned';
-    setAlgorithm(RoutingStrategieType.DISTANCE_VECTOR_POISONED);
-    await notify('Distance-Vector (poisoned reverse) algorithm selected');
+    await applyAlgorithm(
+      'distancePoisoned',
+      RoutingStrategieType.DISTANCE_VECTOR_POISONED,
+      'Distance-Vector (poisoned reverse)'
+    );
   }
 
   async function handleChoosePreset() {
@@ -102,9 +151,8 @@
     try {
       const text = await entry.load();
       importSimulationJson(text);
-
-      // re-apply chosen algorithm to imported routers
-      setAlgorithm(currentAlgoType());
+      syncSelectedToImportedAlgorithm();
+      setAlgorithm(selectedToAlgo(selected));
 
       showScenarioModal = false;
       await notify(`Loaded scenario: ${entry.name}`);
@@ -166,9 +214,8 @@
       const text = await file.text();
 
       importSimulationJson(text);
-
-      // re-apply chosen algorithm
-      setAlgorithm(currentAlgoType());
+      syncSelectedToImportedAlgorithm();
+      setAlgorithm(selectedToAlgo(selected));
 
       await notify(`Imported JSON: ${file.name}`);
     } catch (e) {
@@ -187,7 +234,7 @@
     </div>
 
     <!--top bar center-->
-    <div class="w-1/3 flex items-center justify-center gap-3 whitespace-nowrap">
+    <div class="w-1/3 flex flex-wrap items-center justify-center gap-3">
       <button
         class={`btn-pill ${
           selected === 'link' ? 'btn-pill--primary' : 'btn-pill--ghost'
@@ -213,6 +260,14 @@
         on:click={selectDistanceVectorPoisoned}
       >
         DISTANCE VECTOR (PR)
+      </button>
+
+      <button class="btn-pill btn-pill--ghost" on:click={openRouterHistoryFromToolbar}>
+        HISTORY
+      </button>
+
+      <button class="btn-pill btn-pill--ghost" on:click={() => (showDebugModal = true)}>
+        DEBUG
       </button>
 
       <button
@@ -263,6 +318,8 @@
     {$warningMessage}
   </div>
 {/if}
+
+<DebugConsoleModal open={showDebugModal} onClose={() => (showDebugModal = false)} />
 
 {#if showScenarioModal}
   <div class="modal-backdrop" on:click={() => (showScenarioModal = false)} />

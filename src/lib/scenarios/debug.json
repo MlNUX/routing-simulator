@@ -1,0 +1,73 @@
+{
+  "version": 2,
+  "algorithm": "DISTANCE_VECTOR",
+  "nodes": [
+    { "id": "R1", "name": "R1", "xPos": 100, "yPos": 180, "type": "router" },
+    { "id": "R2", "name": "R2", "xPos": 180, "yPos": 180, "type": "router" },
+    { "id": "R3", "name": "R3", "xPos": 260, "yPos": 180, "type": "router" },
+    { "id": "R4", "name": "R4", "xPos": 340, "yPos": 180, "type": "router" },
+    { "id": "R5", "name": "R5", "xPos": 420, "yPos": 180, "type": "router" },
+    { "id": "R6", "name": "R6", "xPos": 500, "yPos": 180, "type": "router" },
+    { "id": "R7", "name": "R7", "xPos": 580, "yPos": 180, "type": "router" },
+    { "id": "R8", "name": "R8", "xPos": 660, "yPos": 180, "type": "router" },
+    { "id": "R9", "name": "R9", "xPos": 740, "yPos": 180, "type": "router" },
+    { "id": "R10", "name": "R10", "xPos": 820, "yPos": 180, "type": "router" },
+
+    { "id": "R11", "name": "R11", "xPos": 100, "yPos": 360, "type": "router" },
+    { "id": "R12", "name": "R12", "xPos": 180, "yPos": 360, "type": "router" },
+    { "id": "R13", "name": "R13", "xPos": 260, "yPos": 360, "type": "router" },
+    { "id": "R14", "name": "R14", "xPos": 340, "yPos": 360, "type": "router" },
+    { "id": "R15", "name": "R15", "xPos": 420, "yPos": 360, "type": "router" },
+    { "id": "R16", "name": "R16", "xPos": 500, "yPos": 360, "type": "router" },
+    { "id": "R17", "name": "R17", "xPos": 580, "yPos": 360, "type": "router" },
+    { "id": "R18", "name": "R18", "xPos": 660, "yPos": 360, "type": "router" },
+    { "id": "R19", "name": "R19", "xPos": 740, "yPos": 360, "type": "router" },
+    { "id": "R20", "name": "R20", "xPos": 820, "yPos": 360, "type": "router" }
+  ],
+  "links": [
+    { "id": "L1", "sourceId": "R1", "targetId": "R2", "weight": 1 },
+    { "id": "L2", "sourceId": "R2", "targetId": "R3", "weight": 1 },
+    { "id": "L3", "sourceId": "R3", "targetId": "R4", "weight": 1 },
+    { "id": "L4", "sourceId": "R4", "targetId": "R5", "weight": 1 },
+    { "id": "L5", "sourceId": "R5", "targetId": "R6", "weight": 1 },
+    { "id": "L6", "sourceId": "R6", "targetId": "R7", "weight": 1 },
+    { "id": "L7", "sourceId": "R7", "targetId": "R8", "weight": 1 },
+    { "id": "L8", "sourceId": "R8", "targetId": "R9", "weight": 1 },
+    { "id": "L9", "sourceId": "R9", "targetId": "R10", "weight": 1 },
+
+    { "id": "L10", "sourceId": "R2", "targetId": "R6", "weight": 3 },
+    { "id": "L11", "sourceId": "R3", "targetId": "R7", "weight": 2 },
+    { "id": "L12", "sourceId": "R4", "targetId": "R9", "weight": 4 },
+    { "id": "L13", "sourceId": "R5", "targetId": "R10", "weight": 5 },
+
+    { "id": "L14", "sourceId": "R11", "targetId": "R12", "weight": 1 },
+    { "id": "L15", "sourceId": "R12", "targetId": "R13", "weight": 1 },
+    { "id": "L16", "sourceId": "R13", "targetId": "R14", "weight": 1 },
+    { "id": "L17", "sourceId": "R14", "targetId": "R15", "weight": 1 },
+    { "id": "L18", "sourceId": "R15", "targetId": "R16", "weight": 1 },
+    { "id": "L19", "sourceId": "R16", "targetId": "R17", "weight": 1 },
+    { "id": "L20", "sourceId": "R17", "targetId": "R18", "weight": 1 },
+    { "id": "L21", "sourceId": "R18", "targetId": "R19", "weight": 1 },
+    { "id": "L22", "sourceId": "R19", "targetId": "R20", "weight": 1 },
+
+    { "id": "L23", "sourceId": "R12", "targetId": "R16", "weight": 2 },
+    { "id": "L24", "sourceId": "R13", "targetId": "R18", "weight": 4 },
+    { "id": "L25", "sourceId": "R14", "targetId": "R19", "weight": 3 },
+    { "id": "L26", "sourceId": "R15", "targetId": "R20", "weight": 6 }
+  ],
+  "totalSteps": 12,
+  "events": [
+    { "step": 1, "type": "PLAY", "payload": {} },
+    { "step": 2, "type": "PLAY", "payload": {} },
+    { "step": 3, "type": "PLAY", "payload": {} },
+    { "step": 4, "type": "PLAY", "payload": {} },
+    { "step": 5, "type": "PLAY", "payload": {} },
+    { "step": 6, "type": "PLAY", "payload": {} },
+    { "step": 7, "type": "PLAY", "payload": {} },
+    { "step": 8, "type": "PLAY", "payload": {} },
+    { "step": 9, "type": "PLAY", "payload": {} },
+    { "step": 10, "type": "PLAY", "payload": {} },
+    { "step": 11, "type": "PLAY", "payload": {} }
+  ]
+}
+

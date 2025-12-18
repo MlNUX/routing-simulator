@@ -9,6 +9,7 @@
   import PlaybackControls from '$lib/components/PlaybackControls.svelte';
   import RouterTablePanel from '$lib/components/RouterTablePanel.svelte';
   import Packets from '$lib/components/Packets.svelte';
+  import RouterHistoryModal from '$lib/components/RouterHistoryModal.svelte';
 
   import {
     simulation,
@@ -129,16 +130,14 @@
     <Editor />
   </div>
 
-  <div
-    class="top-bar"
-    style="transform: scale(var(--uiScale, 1)); transform-origin: top left;"
-  >
+  <div class="top-bar" style="transform: scale(var(--uiScale, 1)); transform-origin: top left;">
     <Toolbar />
   </div>
 
   <RouterPanel />
   <RouterTablePanel />
   <Packets />
+  <RouterHistoryModal />
 
   <div
     class="absolute left-1/2 bottom-6 z-10 px-4 w-[min(900px,90vw)] justify-center"

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { get } from 'svelte/store';
   import { SvelteFlow, Background, type NodeTypes } from '@xyflow/svelte';
 
   import RouterNode from '$lib/components/RouterNode.svelte';
@@ -18,7 +19,10 @@
     selectedEdgeId,
     setSelectedEdge,
     setMultiSelection,
-    importJson as importSimulationJson
+    importJson as importSimulationJson,
+    packetHighlightEdgeIds,
+    packetHighlightColor,
+    shortestPathHighlightEdgeIds
   } from '$lib/stores/simulation';
 
   const proOptions = { hideAttribution: true };
@@ -80,19 +84,45 @@
         position: { x, y },
         data: {
           label: node?.name ?? id,
-          optimal: !!node?.optimal,
+          status: String(node?.optimalState ?? 'pre'),
           onSelect: (rid: string) => setSelectedRouter(rid)
         }
       };
     });
   }
 
-  function buildFlowEdgesFromTopology(topo: any, selectedId: string | null): any[] {
+  function buildFlowEdgesFromTopology(
+    topo: any,
+    selectedId: string | null,
+    packetEdges: Set<string>,
+    packetColor: 'orange' | 'red' | null,
+    shortestEdges: Set<string>
+  ): any[] {
     if (!topo || !topo.links) return [];
 
     return topo.links.map((link: any) => {
       const id = String(link.id);
       const isSelected = selectedId === id;
+
+      const isPacket = packetEdges.has(id);
+      const isShortest = shortestEdges.has(id);
+
+      let style: any = undefined;
+      let labelStyle: any = undefined;
+
+      if (isPacket) {
+        style = {
+          stroke: packetColor === 'red' ? '#ef4444' : '#f97316',
+          strokeWidth: 4
+        };
+        labelStyle = { fill: style.stroke, fontWeight: 800 };
+      } else if (isSelected) {
+        style = { stroke: '#f97316', strokeWidth: 4 };
+        labelStyle = { fill: '#f97316', fontWeight: 700 };
+      } else if (isShortest) {
+        style = { stroke: '#22c55e', strokeWidth: 3 };
+        labelStyle = { fill: '#22c55e', fontWeight: 800 };
+      }
 
       return {
         id,
@@ -101,15 +131,23 @@
         label: String(link.weight ?? ''),
         selectable: true,
         selected: isSelected,
-        style: isSelected ? { stroke: '#f97316', strokeWidth: 4 } : undefined,
-        labelStyle: isSelected ? { fill: '#f97316', fontWeight: 700 } : undefined
+        style,
+        labelStyle
       };
     });
   }
 
   $: if (topology) {
+    const packetSet = new Set<string>($packetHighlightEdgeIds ?? []);
+    const shortestSet = new Set<string>($shortestPathHighlightEdgeIds ?? []);
     flowNodes = buildFlowNodesFromTopology(topology);
-    flowEdges = buildFlowEdgesFromTopology(topology, $selectedEdgeId);
+    flowEdges = buildFlowEdgesFromTopology(
+      topology,
+      $selectedEdgeId,
+      packetSet,
+      $packetHighlightColor,
+      shortestSet
+    );
   }
 
   $: {
@@ -138,6 +176,34 @@
       setMultiSelection(selectedNodeIds, selectedEdgeIds);
     } else {
       setMultiSelection([], []);
+    }
+  }
+
+  // ----------------------------
+  // Delete-mode edge delete fix:
+  // Some XYFlow setups end up selecting the edge but not reliably firing the edge click handler in
+  // "box selection" mode. This makes single-edge-click deletion reliable by deleting the edge when
+  // exactly one edge is selected in delete mode (nodes not selected).
+  // ----------------------------
+  let lastAutoDeletedEdgeId: string | null = null;
+
+  $: {
+    if (mode === 'delete' && !isRunning) {
+      const selectedEdges = flowEdges.filter((e) => !!e?.selected).map((e) => String(e.id));
+      const selectedNodes = flowNodes.filter((n) => !!n?.selected).map((n) => String(n.id));
+
+      if (selectedEdges.length === 1 && selectedNodes.length === 0) {
+        const edgeId = selectedEdges[0];
+        if (edgeId && edgeId !== lastAutoDeletedEdgeId) {
+          lastAutoDeletedEdgeId = edgeId;
+          deleteLinkById(edgeId);
+          setSelectedEdge(null);
+        }
+      } else {
+        lastAutoDeletedEdgeId = null;
+      }
+    } else {
+      lastAutoDeletedEdgeId = null;
     }
   }
 
@@ -209,20 +275,44 @@
     setSelectedEdge(null);
   }
 
-  function handleEdgeClick(payload: any) {
-    const edge =
-      payload?.detail?.edge ??
-      payload?.edge ??
-      payload?.detail ??
-      payload;
+  function extractEdgeId(payload: any): string {
+    const candidates = [
+      payload?.detail?.edge?.id,
+      payload?.detail?.id,
+      payload?.edge?.id,
+      payload?.id,
+      payload?.detail?.edgeId
+    ];
 
-    const edgeId = edge?.id ? String(edge.id) : '';
+    for (const c of candidates) {
+      const s = String(c ?? '').trim();
+      if (s.length > 0) return s;
+    }
+
+    return '';
+  }
+
+  function handleEdgeClick(payload: any) {
+    const edgeId = extractEdgeId(payload);
     if (!edgeId) return;
 
-    if (mode === 'delete') {
+    // Stop paneClick from racing edge click in some browsers/DOM compositions
+    const rawEvt = payload?.detail?.event ?? payload?.event;
+    if (rawEvt && typeof rawEvt.stopPropagation === 'function') {
+      rawEvt.stopPropagation();
+    }
+
+    // Always read the current mode directly from the store (avoid any stale closure issues)
+    const modeNow = get(placementMode);
+
+    if (modeNow === 'delete') {
       if (isRunning) return;
+
+      // Guard against double-trigger with the auto-delete watcher
+      lastAutoDeletedEdgeId = edgeId;
+
       deleteLinkById(edgeId);
-      if ($selectedEdgeId === edgeId) {
+      if (get(selectedEdgeId) === edgeId) {
         setSelectedEdge(null);
       }
       return;
@@ -343,23 +433,6 @@
       await notify('Import failed (invalid JSON?)');
     }
   }
-
-  // ------------------- Canvas UI: grid toggle + fit view -------------------
-
-  let showGrid = true;
-  let fitViewNonce = 0;
-
-  function toggleGrid(event: MouseEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    showGrid = !showGrid;
-  }
-
-  function fitViewNow(event: MouseEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    fitViewNonce = fitViewNonce + 1;
-  }
 </script>
 
 <div
@@ -372,51 +445,35 @@
   on:drop={handleDrop}
 >
   {#if browser}
-    {#key fitViewNonce}
-      <SvelteFlow
-        bind:nodes={flowNodes}
-        bind:edges={flowEdges}
-        {nodeTypes}
-        {proOptions}
-        nodeOrigin={[0.5, 0.5]}
-        fitView
-        nodesDraggable={!isRunning}
-        snapToGrid={true}
-        snapGrid={[20, 20]}
-        selectionOnDrag={mode === 'delete'}
-        defaultEdgeOptions={{ selectable: true, interactionWidth: 32 }}
-        on:nodedragstop={handleNodeDragStop}
-        on:selectiondragstop={handleSelectionDragStop}
-        on:edgeclick={handleEdgeClick}
-        on:edgeClick={handleEdgeClick}
-        on:paneClick={handlePaneClick}
-        on:paneclick={handlePaneClick}
-      >
-        {#if showGrid}
-          <!-- Use a visible line grid with explicit color -->
-          <Background
-            variant="lines"
-            gap={20}
-            size={1}
-            color="rgba(226, 232, 240, 0.14)"
-            bgColor="transparent"
-          />
-        {/if}
-      </SvelteFlow>
-    {/key}
+    <SvelteFlow
+      bind:nodes={flowNodes}
+      bind:edges={flowEdges}
+      {nodeTypes}
+      {proOptions}
+      nodeOrigin={[0.5, 0.5]}
+      fitView
+      nodesDraggable={!isRunning}
+      snapToGrid={true}
+      snapGrid={[20, 20]}
+      selectionOnDrag={mode === 'delete'}
+      defaultEdgeOptions={{ selectable: true, interactionWidth: 32 }}
+      on:nodedragstop={handleNodeDragStop}
+      on:selectiondragstop={handleSelectionDragStop}
+      on:edgeclick={handleEdgeClick}
+      on:edgeClick={handleEdgeClick}
+      on:paneClick={handlePaneClick}
+      on:paneclick={handlePaneClick}
+    >
+      <Background
+        variant="lines"
+        gap={20}
+        size={1}
+        color="rgba(226, 232, 240, 0.14)"
+        bgColor="transparent"
+      />
+    </SvelteFlow>
   {:else}
     <div class="ssr-placeholder"></div>
-  {/if}
-
-  {#if browser}
-    <div class="canvas-tools" aria-label="Canvas tools">
-      <button class="canvas-btn" on:click={fitViewNow} title="Fit view">
-        Fit
-      </button>
-      <button class="canvas-btn" on:click={toggleGrid} title="Toggle grid">
-        Grid: {showGrid ? 'On' : 'Off'}
-      </button>
-    </div>
   {/if}
 
   {#if isDragOver}
@@ -457,31 +514,6 @@
   .ssr-placeholder {
     position: absolute;
     inset: 0;
-  }
-
-  .canvas-tools {
-    position: absolute;
-    right: 16px;
-    bottom: 16px;
-    display: flex;
-    gap: 8px;
-    z-index: 25;
-    pointer-events: auto;
-  }
-
-  .canvas-btn {
-    padding: 8px 10px;
-    border-radius: 12px;
-    border: 1px solid rgba(15, 23, 42, 0.18);
-    background: rgba(255, 255, 255, 0.92);
-    color: #0f172a;
-    font-size: 11px;
-    cursor: pointer;
-    box-shadow: 0 6px 12px rgba(15, 23, 42, 0.12);
-  }
-
-  .canvas-btn:hover {
-    background: rgba(255, 255, 255, 0.98);
   }
 
   .drop-overlay {
@@ -536,11 +568,6 @@
     border: 2px dashed rgba(255, 255, 255, 0.75);
     z-index: 20;
     pointer-events: none;
-  }
-
-  :global(.svelte-flow__edge.selected path) {
-    stroke: #f97316;
-    stroke-width: 4px;
   }
 </style>
 

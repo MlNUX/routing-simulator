@@ -9,12 +9,11 @@
     linkWeight,
     setLinkWeight,
     clearNetwork,
-    zoomInUI,
-    zoomOutUI,
     canUndo,
     canRedo,
     undo,
-    redo
+    redo,
+    sendPacket
   } from '$lib/stores/simulation';
 
   $: controller = $simulation as any;
@@ -28,6 +27,42 @@
 
   let showShortcuts = false;
 
+  // ------------------- Send packet modal -------------------
+  let showSendPacket = false;
+  let packetSource = '';
+  let packetTarget = '';
+
+  function routerIdsFromTopology(): string[] {
+    const topo = typeof controller?.getTopology === 'function' ? controller.getTopology() : controller?.topology;
+    const nodes = topo?.nodes instanceof Map ? Array.from(topo.nodes.values()) : [];
+    const ids = nodes.map((n: any) => String(n?.id ?? '')).filter((x: string) => x.length > 0);
+    ids.sort((a: string, b: string) => a.localeCompare(b));
+    return ids;
+  }
+
+  $: routerIds = routerIdsFromTopology();
+
+  function openSendPacketModal() {
+    if (isRunning) return;
+    showSendPacket = true;
+
+    const first = routerIds[0] ?? '';
+    const second = routerIds.length > 1 ? routerIds[1] : first;
+
+    packetSource = packetSource && routerIds.includes(packetSource) ? packetSource : first;
+    packetTarget = packetTarget && routerIds.includes(packetTarget) ? packetTarget : second;
+  }
+
+  function closeSendPacketModal() {
+    showSendPacket = false;
+  }
+
+  function commitSendPacket() {
+    if (!packetSource || !packetTarget) return;
+    sendPacket(packetSource, packetTarget);
+    showSendPacket = false;
+  }
+
   async function handleClearNetwork() {
     if (isRunning) {
       await notify('Pause simulation before clearing the network');
@@ -35,11 +70,6 @@
     }
     clearNetwork();
     await notify('Network cleared');
-  }
-
-  async function handleSendPacket() {
-    console.log('Send packet (dummy)');
-    await notify('Send packet (dummy)');
   }
 
   async function handleRouterClick() {
@@ -64,14 +94,6 @@
       return;
     }
     toggleDeletePlacement();
-  }
-
-  function handleZoomIn() {
-    zoomInUI();
-  }
-
-  function handleZoomOut() {
-    zoomOutUI();
   }
 
   function handleWeightInput(event: Event) {
@@ -105,27 +127,16 @@
   }
 </script>
 
-<aside
-  class="left-panel"
-  style="transform: scale(var(--uiScale, 1)); transform-origin: top left;"
->
+<aside class="left-panel" style="transform-origin: top left;">
   <button class="btn-small-primary" on:click={handleClearNetwork} disabled={isRunning}>
     Clear network
   </button>
 
-  <button
-    class="btn-small-primary"
-    style="margin-top: 8px;"
-    on:click={handleSendPacket}
-  >
+  <button class="btn-small-primary" style="margin-top: 8px;" on:click={openSendPacketModal} disabled={isRunning}>
     Send packet
   </button>
 
-  <button
-    class="btn-small-primary"
-    style="margin-top: 8px;"
-    on:click={toggleShortcuts}
-  >
+  <button class="btn-small-primary" style="margin-top: 8px;" on:click={toggleShortcuts}>
     Shortcuts
   </button>
 
@@ -134,9 +145,9 @@
 
     <div class="palette-list">
       <div
-        class={`palette-item ${
-          currentMode === 'router' ? 'palette-item--active' : ''
-        } ${isRunning ? 'palette-item--disabled' : ''}`}
+        class={`palette-item ${currentMode === 'router' ? 'palette-item--active' : ''} ${
+          isRunning ? 'palette-item--disabled' : ''
+        }`}
         on:click={handleRouterClick}
       >
         <div class="palette-icon palette-icon--router"></div>
@@ -146,9 +157,9 @@
       </div>
 
       <div
-        class={`palette-item ${
-          currentMode === 'link' ? 'palette-item--active' : ''
-        } ${isRunning ? 'palette-item--disabled' : ''}`}
+        class={`palette-item ${currentMode === 'link' ? 'palette-item--active' : ''} ${
+          isRunning ? 'palette-item--disabled' : ''
+        }`}
         style="margin-top: 6px;"
         on:click={handleLinkClick}
       >
@@ -179,9 +190,9 @@
       {/if}
 
       <div
-        class={`palette-item ${
-          currentMode === 'delete' ? 'palette-item--active' : ''
-        } ${isRunning ? 'palette-item--disabled' : ''}`}
+        class={`palette-item ${currentMode === 'delete' ? 'palette-item--active' : ''} ${
+          isRunning ? 'palette-item--disabled' : ''
+        }`}
         style="margin-top: 6px;"
         on:click={handleDeleteClick}
       >
@@ -224,15 +235,6 @@
         on:click={handleRedo}
       >
         ↷
-      </button>
-    </div>
-
-    <div class="zoom-row">
-      <button class="zoom-btn" title="Zoom out UI" on:click={handleZoomOut}>
-        🔍-
-      </button>
-      <button class="zoom-btn" title="Zoom in UI" on:click={handleZoomIn}>
-        🔍+
       </button>
     </div>
   </div>
@@ -304,6 +306,41 @@
       <div class="shortcuts-footnote">
         Note: editing and undo/redo are blocked while the simulation is playing.
       </div>
+    </div>
+  {/if}
+
+  {#if showSendPacket}
+    <div class="shortcuts-backdrop" on:click={closeSendPacketModal} />
+
+    <div class="shortcuts-modal" style="top: 120px;">
+      <div class="shortcuts-header">
+        <div class="shortcuts-title">Send packet</div>
+        <button class="btn-icon" title="Close" on:click={closeSendPacketModal}>✖</button>
+      </div>
+
+      {#if routerIds.length < 2}
+        <div style="font-size: 12px; opacity: 0.8;">Need at least 2 routers.</div>
+      {:else}
+        <div style="display:grid; gap: 8px;">
+          <label style="font-size: 12px; font-weight: 700;">Source</label>
+          <select class="field-input" bind:value={packetSource}>
+            {#each routerIds as rid (rid)}
+              <option value={rid}>{rid}</option>
+            {/each}
+          </select>
+
+          <label style="font-size: 12px; font-weight: 700;">Target</label>
+          <select class="field-input" bind:value={packetTarget}>
+            {#each routerIds as rid (rid)}
+              <option value={rid}>{rid}</option>
+            {/each}
+          </select>
+
+          <button class="btn-small-primary" on:click={commitSendPacket} style="margin-top: 6px;">
+            Send
+          </button>
+        </div>
+      {/if}
     </div>
   {/if}
 </aside>
@@ -382,6 +419,36 @@
     font-size: 11px;
     opacity: 0.75;
     color: #0f172a;
+  }
+
+  .field-input {
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(15, 23, 42, 0.25);
+    background: rgba(255, 255, 255, 0.95);
+  }
+
+  .btn-small-primary {
+    padding: 6px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(15, 23, 42, 0.18);
+    background: rgba(2, 132, 199, 0.10);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .btn-small-primary:hover {
+    background: rgba(2, 132, 199, 0.16);
+  }
+
+  .btn-icon {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 14px;
   }
 </style>
 

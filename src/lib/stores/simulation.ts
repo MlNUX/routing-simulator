@@ -1,9 +1,7 @@
-// src/lib/stores/simulation.ts
-import { writable, get } from 'svelte/store';
+import { writable, get, derived } from 'svelte/store';
 
 import { SimulationController } from './SimulationController';
 import type { AlgorithmType } from './RoutingStrategieType';
-import { RoutingStrategieType } from './RoutingStrategieType';
 import type { SimulationEvent } from './SimulationEvent';
 import type { SimulationState } from './SimulationState';
 import { Topology } from './Topology';
@@ -13,181 +11,7 @@ import { Link } from './Link';
 import { RoutingTable } from './RoutingTable';
 
 // ---------------------------------------------------------------------------
-// UI Zoom (scales UI chrome, not the canvas)
-// ---------------------------------------------------------------------------
-
-export const uiScale = writable<number>(1);
-
-const UI_SCALE_MIN = 0.6;
-const UI_SCALE_MAX = 1.6;
-const UI_SCALE_STEP = 0.1;
-
-function clampUiScale(v: number): number {
-  const clamped = Math.max(UI_SCALE_MIN, Math.min(UI_SCALE_MAX, v));
-  return Number(clamped.toFixed(2));
-}
-
-export function zoomInUI(): void {
-  uiScale.update((s) => clampUiScale(s + UI_SCALE_STEP));
-}
-
-export function zoomOutUI(): void {
-  uiScale.update((s) => clampUiScale(s - UI_SCALE_STEP));
-}
-
-export function resetUIZoom(): void {
-  uiScale.set(1);
-}
-
-// ---------------------------------------------------------------------------
-// Warnings (shown in toolbar)
-// ---------------------------------------------------------------------------
-
-export const warningMessage = writable<string | null>(null);
-
-function clearWarning(): void {
-  warningMessage.set(null);
-}
-
-function validateTopologyForRun(controller: SimulationController): string | null {
-  const nodeCount = controller.topology.nodes.size;
-  const linkCount = controller.topology.links.length;
-
-  if (nodeCount < 2) {
-    return 'Need at least 2 routers before running the simulation.';
-  }
-  if (linkCount < 1) {
-    return 'Need at least 1 link before running the simulation.';
-  }
-
-  for (const l of controller.topology.links) {
-    if (!l || typeof l.id !== 'string' || l.id.length === 0) {
-      return 'Invalid link detected (missing id).';
-    }
-    if (!Number.isFinite(l.weight) || l.weight <= 0) {
-      return `Invalid weight on link ${l.id} (must be > 0).`;
-    }
-  }
-
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// Undo / Redo
-// ---------------------------------------------------------------------------
-
-export const canUndo = writable<boolean>(false);
-export const canRedo = writable<boolean>(false);
-
-let undoStack: string[] = [];
-let redoStack: string[] = [];
-let isRestoring = false;
-
-function syncUndoFlags(): void {
-  canUndo.set(undoStack.length > 0);
-  canRedo.set(redoStack.length > 0);
-}
-
-function snapshotForUndo(controller: SimulationController): void {
-  undoStack.push(controller.exportJson());
-  redoStack = [];
-  syncUndoFlags();
-}
-
-function clearUndoHistory(): void {
-  undoStack = [];
-  redoStack = [];
-  syncUndoFlags();
-}
-
-function restoreFromJson(json: string): void {
-  isRestoring = true;
-
-  selectedRouterId.set(null);
-  selectedEdgeId.set(null);
-  selectedNodeIdsMulti.set([]);
-  selectedEdgeIdsMulti.set([]);
-  placementMode.set('none');
-  clearLinkSelection();
-
-  simulation.update((controller) => {
-    controller.importJson(json);
-    controller.setAlgorithm(get(currentAlgorithm));
-    return controller;
-  });
-
-  isRestoring = false;
-}
-
-function performEdit(mutator: (controller: SimulationController) => void): void {
-  const controller = get(simulation);
-
-  if (controller.running) {
-    warningMessage.set('Pause simulation before editing the topology.');
-    return;
-  }
-
-  clearWarning();
-
-  simulation.update((c) => {
-    if (!isRestoring) {
-      snapshotForUndo(c);
-    }
-    mutator(c);
-    return c;
-  });
-}
-
-export function undo(): void {
-  const controller = get(simulation);
-
-  if (controller.running) {
-    warningMessage.set('Pause simulation before using undo/redo.');
-    return;
-  }
-
-  if (undoStack.length === 0) {
-    return;
-  }
-
-  const current = controller.exportJson();
-  const prev = undoStack.pop() as string;
-
-  redoStack.push(current);
-  syncUndoFlags();
-
-  restoreFromJson(prev);
-}
-
-export function redo(): void {
-  const controller = get(simulation);
-
-  if (controller.running) {
-    warningMessage.set('Pause simulation before using undo/redo.');
-    return;
-  }
-
-  if (redoStack.length === 0) {
-    return;
-  }
-
-  const current = controller.exportJson();
-  const next = redoStack.pop() as string;
-
-  undoStack.push(current);
-  syncUndoFlags();
-
-  restoreFromJson(next);
-}
-
-// ---------------------------------------------------------------------------
-// Current algorithm (so undo/redo/import keeps the chosen algo applied)
-// ---------------------------------------------------------------------------
-
-export const currentAlgorithm = writable<AlgorithmType>(RoutingStrategieType.LINK_STATE);
-
-// ---------------------------------------------------------------------------
-// Sample topology
+// Sample topology (used on first load)
 // ---------------------------------------------------------------------------
 
 function createSampleTopology(): Topology {
@@ -228,28 +52,97 @@ function createSampleTopology(): Topology {
 }
 
 // ---------------------------------------------------------------------------
-// Main simulation store
+// Global simulation store
 // ---------------------------------------------------------------------------
 
 export const simulation = writable(new SimulationController(createSampleTopology()));
 
 // ---------------------------------------------------------------------------
-// Selection (router + edge)
+// UI scale (still used by layout, but zoom buttons can be removed from UI)
+// ---------------------------------------------------------------------------
+
+export const uiScale = writable<number>(1);
+
+export function zoomInUI(): void {
+  uiScale.update((s) => Math.min(1.5, Number((s + 0.1).toFixed(2))));
+}
+
+export function zoomOutUI(): void {
+  uiScale.update((s) => Math.max(0.6, Number((s - 0.1).toFixed(2))));
+}
+
+// ---------------------------------------------------------------------------
+// Routing-table history modal (multi-router + multi-step selection)
+// ---------------------------------------------------------------------------
+
+export const routerHistoryModalOpen = writable<boolean>(false);
+
+// Selected routers + steps shown in the history modal
+export const routerHistorySelectedRouterIds = writable<string[]>([]);
+export const routerHistorySelectedSteps = writable<number[]>([]);
+
+function uniqSortedStrings(xs: string[]): string[] {
+  const s = new Set<string>();
+  for (const x of xs) {
+    const v = String(x ?? '').trim();
+    if (v.length > 0) s.add(v);
+  }
+  return Array.from(s.values()).sort((a, b) => a.localeCompare(b));
+}
+
+function uniqSortedNumbers(xs: number[]): number[] {
+  const s = new Set<number>();
+  for (const x of xs) {
+    const v = Number(x);
+    if (Number.isFinite(v)) s.add(v);
+  }
+  return Array.from(s.values()).sort((a, b) => a - b);
+}
+
+// Toolbar button: open with nothing selected
+export function openRouterHistoryFromToolbar(): void {
+  routerHistoryModalOpen.set(true);
+  routerHistorySelectedRouterIds.set([]);
+  routerHistorySelectedSteps.set([]);
+}
+
+// Router-panel button: preselect router (steps default: current only; diffs compare vs previous step automatically)
+export function openRouterHistoryForRouter(routerId: string): void {
+  const rid = String(routerId ?? '').trim();
+  routerHistoryModalOpen.set(true);
+
+  routerHistorySelectedRouterIds.set(rid.length > 0 ? [rid] : []);
+
+  const ctrl = get(simulation) as any;
+  const cur = Number(ctrl?.currentStepIndex ?? 0);
+  routerHistorySelectedSteps.set(uniqSortedNumbers([cur]));
+}
+
+export function closeRouterHistory(): void {
+  routerHistoryModalOpen.set(false);
+}
+
+// Allow other UI pieces to update selection explicitly if needed
+export function setRouterHistoryRouters(routerIds: string[]): void {
+  routerHistorySelectedRouterIds.set(uniqSortedStrings(routerIds));
+}
+
+export function setRouterHistorySteps(steps: number[]): void {
+  routerHistorySelectedSteps.set(uniqSortedNumbers(steps));
+}
+
+// ---------------------------------------------------------------------------
+// Selection (single + multi)
 // ---------------------------------------------------------------------------
 
 export const selectedRouterId = writable<string | null>(null);
 export const selectedEdgeId = writable<string | null>(null);
 
-// Multi-select only used in delete mode
 export const selectedNodeIdsMulti = writable<string[]>([]);
 export const selectedEdgeIdsMulti = writable<string[]>([]);
 
 export function setSelectedEdge(id: string | null): void {
   selectedEdgeId.set(id);
-
-  if (id) {
-    selectedRouterId.set(null);
-  }
 }
 
 export function setMultiSelection(nodeIds: string[], edgeIds: string[]): void {
@@ -258,13 +151,12 @@ export function setMultiSelection(nodeIds: string[], edgeIds: string[]): void {
 }
 
 // ---------------------------------------------------------------------------
-// Tool mode
+// Placement / edit mode
 // ---------------------------------------------------------------------------
 
 export type PlacementMode = 'none' | 'router' | 'link' | 'delete';
 export const placementMode = writable<PlacementMode>('none');
 
-// Link tool state
 export const linkSourceRouterId = writable<string | null>(null);
 export const linkTargetRouterId = writable<string | null>(null);
 export const linkWeight = writable<number>(1);
@@ -280,50 +172,30 @@ export function clearLinkSelection(): void {
 }
 
 export function toggleRouterPlacement(): void {
-  const controller = get(simulation);
-  if (controller.running) {
-    warningMessage.set('Pause simulation before editing the topology.');
-    return;
-  }
-
   placementMode.update((m) => {
-    const next = m === 'router' ? 'none' : 'router';
-    clearLinkSelection();
-    selectedNodeIdsMulti.set([]);
-    selectedEdgeIdsMulti.set([]);
+    const next: PlacementMode = m === 'router' ? 'none' : 'router';
+    if (next !== 'link') {
+      clearLinkSelection();
+    }
     return next;
   });
 }
 
 export function toggleLinkPlacement(): void {
-  const controller = get(simulation);
-  if (controller.running) {
-    warningMessage.set('Pause simulation before editing the topology.');
-    return;
-  }
-
   placementMode.update((m) => {
-    const next = m === 'link' ? 'none' : 'link';
-    clearLinkSelection();
-    selectedNodeIdsMulti.set([]);
-    selectedEdgeIdsMulti.set([]);
+    const next: PlacementMode = m === 'link' ? 'none' : 'link';
+    if (next === 'link') {
+      clearLinkSelection();
+    }
     return next;
   });
 }
 
 export function toggleDeletePlacement(): void {
-  const controller = get(simulation);
-  if (controller.running) {
-    warningMessage.set('Pause simulation before editing the topology.');
-    return;
-  }
-
   placementMode.update((m) => {
-    const next = m === 'delete' ? 'none' : 'delete';
-    clearLinkSelection();
-    if (next !== 'delete') {
-      selectedNodeIdsMulti.set([]);
-      selectedEdgeIdsMulti.set([]);
+    const next: PlacementMode = m === 'delete' ? 'none' : 'delete';
+    if (next !== 'link') {
+      clearLinkSelection();
     }
     return next;
   });
@@ -332,36 +204,19 @@ export function toggleDeletePlacement(): void {
 export function clearPlacementMode(): void {
   placementMode.set('none');
   clearLinkSelection();
-  selectedNodeIdsMulti.set([]);
-  selectedEdgeIdsMulti.set([]);
 }
-
-// ---------------------------------------------------------------------------
-// Selection behavior (normal + link/delete tools)
-// ---------------------------------------------------------------------------
 
 export function setSelectedRouter(id: string | null): void {
   selectedRouterId.set(id);
-
-  if (id) {
-    selectedEdgeId.set(null);
-  }
 
   if (!id) {
     return;
   }
 
-  const controller = get(simulation);
   const mode = get(placementMode);
-
-  if (controller.running) {
-    warningMessage.set('Pause simulation before editing the topology.');
-    return;
-  }
 
   if (mode === 'delete') {
     deleteNode(id);
-    selectedRouterId.set(null);
     return;
   }
 
@@ -369,6 +224,7 @@ export function setSelectedRouter(id: string | null): void {
     return;
   }
 
+  const controller = get(simulation);
   const node = controller.topology.nodes.get(id);
   if (!(node instanceof Router)) {
     return;
@@ -397,39 +253,57 @@ export function setSelectedRouter(id: string | null): void {
 }
 
 // ---------------------------------------------------------------------------
-// Simulation controls
+// Playback controls
 // ---------------------------------------------------------------------------
 
 export function play(): void {
-  const controller = get(simulation);
-  const msg = validateTopologyForRun(controller);
-  if (msg) {
-    warningMessage.set(msg);
-    return;
-  }
-
-  clearWarning();
-
-  simulation.update((c) => {
-    c.play();
-    return c;
-  });
-}
-
-export function pause(): void {
-  clearWarning();
   simulation.update((controller) => {
-    controller.pause();
+    controller.playOneStep();
     return controller;
   });
 }
 
-export function setAlgorithm(algo: AlgorithmType): void {
-  clearWarning();
-  currentAlgorithm.set(algo);
+export function pause(): void {
+  // no-op
+}
 
+// Compatibility stubs
+export const warningMessage = writable<string | null>(null);
+
+export function confirmDiscardFuture(): void {
+  warningMessage.set(null);
+}
+
+export function cancelDiscardFuture(): void {
+  warningMessage.set(null);
+}
+
+export function nextStep(): void {
+  play();
+}
+
+export function previousStep(): void {
+  stepBackward();
+}
+
+export function stop(): void {
+  // no-op
+}
+
+export function reset(): void {
+  // no-op
+}
+
+export function setAlgorithm(algo: AlgorithmType): void {
   simulation.update((controller) => {
     controller.setAlgorithm(algo);
+    return controller;
+  });
+}
+
+export function resetToInitialAndSetAlgorithm(algo: AlgorithmType): void {
+  simulation.update((controller) => {
+    controller.resetToInitial(algo);
     return controller;
   });
 }
@@ -443,215 +317,191 @@ export function jumpToStep(step: number): SimulationState {
   return state;
 }
 
-export function nextStep(): void {
-  const controller = get(simulation);
-  const msg = validateTopologyForRun(controller);
-  if (msg) {
-    warningMessage.set(msg);
-    return;
-  }
-
-  clearWarning();
-
-  simulation.update((c) => {
-    c.nextStep();
-    return c;
+export function stepForward(): void {
+  simulation.update((controller) => {
+    const next = Math.min(controller.currentStepIndex + 1, controller.getTotalSteps() - 1);
+    controller.jumpToStep(next);
+    return controller;
   });
 }
 
-export function stepForward(): void {
-  nextStep();
-}
-
 export function stepBackward(): void {
-  clearWarning();
   simulation.update((controller) => {
-    const anyCtrl = controller as any;
-    const current: number = anyCtrl.currentStepIndex ?? 0;
-    const prev = Math.max(0, current - 1);
+    const prev = Math.max(0, controller.currentStepIndex - 1);
     controller.jumpToStep(prev);
     return controller;
   });
 }
 
-export function stop(): void {
-  clearWarning();
+// ---------------------------------------------------------------------------
+// Undo / Redo (within current timestep only)
+// ---------------------------------------------------------------------------
+
+export const canUndo = derived(simulation, (c) => c.canUndo());
+export const canRedo = derived(simulation, (c) => c.canRedo());
+
+export function undo(): void {
   simulation.update((controller) => {
-    controller.jumpToStep(0);
+    controller.undo();
     return controller;
   });
 }
 
-export function reset(): void {
-  clearWarning();
-  clearUndoHistory();
-
+export function redo(): void {
   simulation.update((controller) => {
-    const topo = controller.getTopology();
-    const next = new SimulationController(topo);
-    next.setAlgorithm(get(currentAlgorithm));
-    return next;
+    controller.redo();
+    return controller;
   });
 }
 
 // ---------------------------------------------------------------------------
-// Topology operations (undoable)
+// Topology edits
 // ---------------------------------------------------------------------------
 
 export function addNode(xPos: number, yPos: number): void {
-  performEdit((controller) => {
+  simulation.update((controller) => {
     controller.addNode(xPos, yPos);
+    return controller;
   });
 }
 
 export function addLink(sourceId: string, targetId: string, weight: number): void {
-  performEdit((controller) => {
+  simulation.update((controller) => {
     controller.addLink(sourceId, targetId, weight);
+    return controller;
   });
 }
 
 export function deleteNode(nodeId: string): void {
-  performEdit((controller) => {
+  simulation.update((controller) => {
     controller.deleteNode(nodeId);
+    return controller;
   });
 }
 
 export function deleteLink(sourceId: string, targetId: string): void {
-  performEdit((controller) => {
+  simulation.update((controller) => {
     controller.deleteLink(sourceId, targetId);
+    return controller;
   });
 }
 
 export function deleteLinkById(linkId: string): void {
-  performEdit((controller) => {
+  simulation.update((controller) => {
     controller.deleteLinkById(linkId);
+    return controller;
   });
 }
 
-export function updateLinkWeight(linkId: string, newWeight: number): void {
-  performEdit((controller) => {
-    controller.updateLinkWeight(linkId, newWeight);
+export function updateLinkWeight(linkId: string, weight: number): void {
+  simulation.update((controller) => {
+    controller.updateLinkWeight(linkId, weight);
+    return controller;
   });
 }
 
-// Router editing
-export function updateNodeName(nodeId: string, newName: string): void {
-  performEdit((controller) => {
-    controller.updateNodeName(nodeId, newName);
+export function updateNodeName(nodeId: string, name: string): void {
+  simulation.update((controller) => {
+    controller.updateNodeName(nodeId, name);
+    return controller;
   });
 }
-
-export function upsertRoutingEntry(
-  routerId: string,
-  destinationId: string,
-  nextHopId: string,
-  cost: number
-): void {
-  performEdit((controller) => {
-    controller.upsertRoutingEntry(routerId, destinationId, nextHopId, cost);
-  });
-}
-
-export function deleteRoutingEntry(routerId: string, destinationId: string): void {
-  performEdit((controller) => {
-    controller.deleteRoutingEntry(routerId, destinationId);
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Clear network (undoable)
-// ---------------------------------------------------------------------------
 
 export function clearNetwork(): void {
-  performEdit((controller) => {
+  simulation.update((controller) => {
     controller.clearNetwork();
-  });
-
-  selectedRouterId.set(null);
-  selectedEdgeId.set(null);
-  selectedNodeIdsMulti.set([]);
-  selectedEdgeIdsMulti.set([]);
-  placementMode.set('none');
-  clearLinkSelection();
-}
-
-// ---------------------------------------------------------------------------
-// Delete selected (supports multi-selection in delete mode)
-// ---------------------------------------------------------------------------
-
-export function deleteSelection(): void {
-  const controller = get(simulation);
-  if (controller.running) {
-    warningMessage.set('Pause simulation before editing the topology.');
-    return;
-  }
-
-  const multiNodes = get(selectedNodeIdsMulti);
-  const multiEdges = get(selectedEdgeIdsMulti);
-
-  if (multiNodes.length > 0 || multiEdges.length > 0) {
-    performEdit((c) => {
-      for (const eid of multiEdges) {
-        c.deleteLinkById(eid);
-      }
-      for (const nid of multiNodes) {
-        c.deleteNode(nid);
-      }
-    });
-
+    clearPlacementMode();
     selectedRouterId.set(null);
     selectedEdgeId.set(null);
-    selectedNodeIdsMulti.set([]);
-    selectedEdgeIdsMulti.set([]);
-    return;
-  }
+    setMultiSelection([], []);
+    return controller;
+  });
+}
 
-  const nodeId = get(selectedRouterId);
-  if (nodeId) {
-    deleteNode(nodeId);
-    selectedRouterId.set(null);
-    return;
-  }
-
+export function deleteSelection(): void {
+  const routerId = get(selectedRouterId);
   const edgeId = get(selectedEdgeId);
+
+  if (routerId) {
+    deleteNode(routerId);
+    selectedRouterId.set(null);
+  }
   if (edgeId) {
     deleteLinkById(edgeId);
     selectedEdgeId.set(null);
   }
+
+  setMultiSelection([], []);
 }
 
-// ---------------------------------------------------------------------------
-// Movement (undoable; called on drag stop)
-// ---------------------------------------------------------------------------
-
 export function updateNodePosition(nodeId: string, xPos: number, yPos: number): void {
-  performEdit((controller) => {
+  simulation.update((controller) => {
     controller.moveNode(nodeId, xPos, yPos);
+    return controller;
   });
 }
 
 export function updateNodePositions(
   updates: { id: string; xPos: number; yPos: number }[]
 ): void {
-  performEdit((controller) => {
+  simulation.update((controller) => {
     controller.moveNodes(updates);
+    return controller;
   });
 }
 
-// ---------------------------------------------------------------------------
-// Events (not undoable here)
-// ---------------------------------------------------------------------------
-
 export function addEvent(event: SimulationEvent): void {
-  clearWarning();
   simulation.update((controller) => {
-    controller.addEvent(event);
+    void event;
     return controller;
   });
 }
 
 // ---------------------------------------------------------------------------
-// Queries / helpers
+// Send packet: highlights
+// ---------------------------------------------------------------------------
+
+export const shortestPathHighlightEdgeIds = writable<string[]>([]);
+export const packetHighlightEdgeIds = writable<string[]>([]);
+export const packetHighlightColor = writable<'orange' | 'red' | null>(null);
+
+let highlightTimer: number | null = null;
+
+function clearHighlights(): void {
+  shortestPathHighlightEdgeIds.set([]);
+  packetHighlightEdgeIds.set([]);
+  packetHighlightColor.set(null);
+}
+
+export function sendPacket(sourceId: string, targetId: string): void {
+  const ctrl = get(simulation);
+
+  // shortest path (green)
+  const shortestNodes = ctrl.getShortestPath(String(sourceId), String(targetId));
+  const shortestEdges = ctrl.nodePathToEdgeIds(shortestNodes);
+  shortestPathHighlightEdgeIds.set(shortestEdges);
+
+  // forwarding path (orange/red)
+  const res = ctrl.getForwardingPath(String(sourceId), String(targetId));
+  const packetEdges = ctrl.nodePathToEdgeIds(res.path);
+  packetHighlightEdgeIds.set(packetEdges);
+  packetHighlightColor.set(res.reached ? 'orange' : 'red');
+
+  if (highlightTimer !== null) {
+    window.clearTimeout(highlightTimer);
+    highlightTimer = null;
+  }
+
+  if (typeof window !== 'undefined') {
+    highlightTimer = window.setTimeout(() => {
+      clearHighlights();
+      highlightTimer = null;
+    }, 5000);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Queries / import-export
 // ---------------------------------------------------------------------------
 
 export function getTopology(): Topology {
@@ -663,22 +513,25 @@ export function getTopology(): Topology {
   return topology;
 }
 
-// ---------------------------------------------------------------------------
-// Import / Export (import is undoable)
-// ---------------------------------------------------------------------------
+export function getPath(sourceId: string, targetId: string): string[] {
+  const ctrl = get(simulation);
+  return ctrl.getForwardingPath(String(sourceId), String(targetId)).path;
+}
 
 export function importJson(json: string): void {
-  performEdit((controller) => {
-    controller.importJson(json);
-    controller.setAlgorithm(get(currentAlgorithm));
-  });
+  simulation.update((controller) => {
+    const res = controller.importJson(json);
+    warningMessage.set(res.warning ?? null);
 
-  selectedRouterId.set(null);
-  selectedEdgeId.set(null);
-  selectedNodeIdsMulti.set([]);
-  selectedEdgeIdsMulti.set([]);
-  placementMode.set('none');
-  clearLinkSelection();
+    clearPlacementMode();
+    selectedRouterId.set(null);
+    selectedEdgeId.set(null);
+    setMultiSelection([], []);
+    clearHighlights();
+
+    // keep modal open state; sanitize selections later in modal if needed
+    return controller;
+  });
 }
 
 export function exportJson(): string {

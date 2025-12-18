@@ -1,5 +1,6 @@
-import { EventType } from "./EventType";
+import { EventType } from './EventType';
 
+// Scenario/event scheduler event (kept for compatibility)
 export class SimulationEvent {
   public step: number;
   public type: EventType;

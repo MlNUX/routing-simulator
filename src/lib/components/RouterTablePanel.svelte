@@ -8,7 +8,9 @@
     updateLinkWeight,
     updateNodeName,
     addLink,
-    deleteLinkById
+    deleteLinkById,
+    openRouterHistoryForRouter,
+    sendPacket
   } from '$lib/stores/simulation';
 
   type RoutingEntryView = {
@@ -24,7 +26,6 @@
   };
 
   $: controller = $simulation as any;
-  $: isRunning = !!controller?.running;
 
   $: topology =
     typeof controller.getTopology === 'function'
@@ -33,6 +34,15 @@
 
   $: selectedId = $selectedRouterId;
   $: edgeId = $selectedEdgeId;
+
+  function fmtCost(cost: number): string {
+    return Number.isFinite(cost) ? String(cost) : '∞';
+  }
+
+  function fmtHop(hop: string): string {
+    const h = String(hop ?? '').trim();
+    return h.length === 0 ? '—' : h;
+  }
 
   function topologyNodesArray(topo: any): any[] {
     if (!topo || !topo.nodes) return [];
@@ -59,8 +69,7 @@
     const ids: string[] = [];
 
     for (const n of arr) {
-      const isRouter = n?.constructor?.name === 'Router';
-      if (isRouter && n?.id) ids.push(String(n.id));
+      if (n?.id) ids.push(String(n.id));
     }
 
     ids.sort((a, b) => a.localeCompare(b));
@@ -77,7 +86,7 @@
     const mapped = rawEntries.map((e: any): RoutingEntryView => ({
       destinationId: String(e.destinationId ?? ''),
       nextHopId: String(e.nextHopId ?? ''),
-      cost: Number(e.cost ?? 0)
+      cost: Number(e.cost)
     }));
 
     mapped.sort((a, b) => a.destinationId.localeCompare(b.destinationId));
@@ -111,15 +120,12 @@
   $: allRouterIds = getAllRouterIds(topology);
   $: selfId = selectedRouter ? String(selectedRouter.id) : '';
 
-  // Direct links (neighbors), but only to other routers
   $: neighborsAll = selectedRouter ? getNeighbors(topology, selfId) : [];
   $: neighborRouterLinks = neighborsAll.filter((n) => allRouterIds.includes(n.otherId));
 
-  // Routing table (read-only), hide self-entry
   $: routingEntriesAll = selectedRouter ? extractRoutingEntries(selectedRouter) : [];
   $: routingEntries = routingEntriesAll.filter((e) => e.destinationId !== selfId);
 
-  // Edge panel (when a link is selected instead of a router)
   $: selectedLink = getLinkById(topology, edgeId);
   $: linkSourceId = selectedLink?.source?.id ?? '';
   $: linkTargetId = selectedLink?.target?.id ?? '';
@@ -209,7 +215,6 @@
   }
 
   function handleNeighborWeightChange(linkId: string, event: Event) {
-    if (isRunning) return;
     const el = event.currentTarget as HTMLInputElement;
     const w = Number(el.value);
     if (!Number.isFinite(w) || w <= 0) return;
@@ -217,7 +222,6 @@
   }
 
   function removeConnection(linkId: string) {
-    if (isRunning) return;
     deleteLinkById(linkId);
     if ($selectedEdgeId === linkId) {
       setSelectedEdge(null);
@@ -243,15 +247,34 @@
     showAddConnection = false;
     connError = null;
   }
+
+  function openHistory() {
+    if (!selectedRouter) return;
+    openRouterHistoryForRouter(String(selectedRouter.id));
+  }
+
+  // ------------------- Send packet (from selected router) -------------------
+  let packetTarget = '';
+
+  $: packetTargets = selfId ? allRouterIds.filter((id) => id !== selfId) : [];
+  $: if (selectedRouter && (packetTarget.length === 0 || !packetTargets.includes(packetTarget))) {
+    packetTarget = packetTargets[0] ?? '';
+  }
+
+  function commitSendPacket() {
+    if (!selfId || !packetTarget) return;
+    sendPacket(selfId, packetTarget);
+  }
 </script>
 
-<div
-  class="router-table-panel"
-  style="transform: scale(var(--uiScale, 1)); transform-origin: top right;"
->
-  <!-- Router panel has priority over link panel -->
+<div class="router-table-panel">
   {#if selectedRouter}
-    <h3>Router: {selectedRouter.id}</h3>
+    <div class="panel-head">
+      <h3>Router: {selectedRouter.id}</h3>
+      <button class="btn-small-primary" on:click={openHistory} title="Show routing table history">
+        History
+      </button>
+    </div>
 
     <!-- 1) Name -->
     <div class="section">
@@ -262,14 +285,13 @@
           class="field-input"
           type="text"
           value={routerNameDraft}
-          disabled={isRunning}
           on:input={handleNameInput}
           on:change={commitRouterName}
           on:keydown={handleNameKeydown}
         />
         <button
           class="btn-small-primary"
-          disabled={isRunning || routerNameDraft.trim().length === 0}
+          disabled={routerNameDraft.trim().length === 0}
           on:click={commitRouterName}
         >
           Save
@@ -281,10 +303,6 @@
           <b>Position:</b>
           {Number(selectedRouter.xPos ?? 0).toFixed(1)} / {Number(selectedRouter.yPos ?? 0).toFixed(1)}
         </div>
-
-        {#if isRunning}
-          <p class="hint">Pause simulation to edit router properties.</p>
-        {/if}
       </div>
     </div>
 
@@ -318,7 +336,6 @@
                     min="1"
                     step="1"
                     value={n.weight}
-                    disabled={isRunning}
                     on:change={(e) => handleNeighborWeightChange(n.linkId, e)}
                   />
                 </td>
@@ -327,7 +344,6 @@
                   <button
                     class="btn-icon"
                     title="Delete connection"
-                    disabled={isRunning}
                     on:click={() => removeConnection(n.linkId)}
                   >
                     🗑
@@ -342,7 +358,7 @@
       <div style="margin-top: 10px; display:flex; align-items:center; gap: 8px;">
         <button
           class="btn-small-primary"
-          disabled={isRunning || availableTargets.length === 0}
+          disabled={availableTargets.length === 0}
           on:click={toggleAddConnection}
           title="Add connection"
         >
@@ -365,7 +381,7 @@
           {/if}
 
           <label class="field-label">Target router</label>
-          <select class="field-input" bind:value={newConnTarget} disabled={isRunning}>
+          <select class="field-input" bind:value={newConnTarget}>
             {#each availableTargets as rid (rid)}
               <option value={rid}>{rid}</option>
             {/each}
@@ -378,14 +394,12 @@
             min="1"
             step="1"
             bind:value={newConnWeight}
-            disabled={isRunning}
           />
 
           <div style="margin-top: 10px; display:flex; gap: 8px;">
             <button
               class="btn-small-primary"
               style="flex: 1;"
-              disabled={isRunning}
               on:click={commitAddConnection}
             >
               Create link
@@ -393,7 +407,6 @@
             <button
               class="btn-small-primary"
               style="flex: 1;"
-              disabled={isRunning}
               on:click={toggleAddConnection}
             >
               Cancel
@@ -407,7 +420,7 @@
     <div class="section">
       <div class="section-title">Routing table</div>
       <p class="hint" style="margin-top: 4px;">
-        Read-only (computed by the algorithm).
+        Computed by the algorithm. Unreachable destinations show ∞.
       </p>
 
       {#if routingEntries.length === 0}
@@ -425,12 +438,36 @@
             {#each routingEntries as entry (entry.destinationId)}
               <tr>
                 <td class="mono">{entry.destinationId}</td>
-                <td class="mono">{entry.nextHopId}</td>
-                <td>{entry.cost}</td>
+                <td class="mono">{fmtHop(entry.nextHopId)}</td>
+                <td>{fmtCost(entry.cost)}</td>
               </tr>
             {/each}
           </tbody>
         </table>
+      {/if}
+    </div>
+
+    <!-- 4) Send packet -->
+    <div class="section">
+      <div class="section-title">Send packet</div>
+      <p class="hint" style="margin-top: 4px;">
+        Highlights: shortest path = green, forwarding path = orange (success) / red (fail).
+      </p>
+
+      {#if packetTargets.length === 0}
+        <p class="subtle">No other routers available.</p>
+      {:else}
+        <div class="row" style="margin-top: 6px;">
+          <select class="field-input" bind:value={packetTarget}>
+            {#each packetTargets as rid (rid)}
+              <option value={rid}>{rid}</option>
+            {/each}
+          </select>
+
+          <button class="btn-small-primary" on:click={commitSendPacket}>
+            Send
+          </button>
+        </div>
       {/if}
     </div>
 
@@ -439,30 +476,32 @@
     </button>
 
   {:else if selectedLink}
-    <h3>Link: {selectedLink.id}</h3>
+    <div class="panel-head">
+      <h3>Link: {selectedLink.id}</h3>
+      <button class="btn-small-primary" on:click={closeEdgePanel}>Close</button>
+    </div>
+
     <p class="subtle">{linkSourceId} ↔ {linkTargetId}</p>
 
-    <label class="field-label">Weight</label>
-    <input
-      class="field-input"
-      type="number"
-      min="1"
-      step="1"
-      value={linkWeightValue}
-      disabled={isRunning}
-      on:change={handleLinkWeightChange}
-    />
-
-    {#if isRunning}
-      <p class="hint">Pause simulation to edit weight.</p>
-    {/if}
-
-    <button class="btn-small-primary" style="margin-top: 10px;" on:click={closeEdgePanel}>
-      Close
-    </button>
+    <div class="section">
+      <div class="section-title">Weight</div>
+      <input
+        class="field-input"
+        type="number"
+        min="1"
+        step="1"
+        value={linkWeightValue}
+        on:change={handleLinkWeightChange}
+      />
+    </div>
 
   {:else}
-    <p>Select a router to view/edit its name and connections, or click a link to edit its weight.</p>
+    <div class="empty-state">
+      <div class="empty-title">CHOOSE A ROUTER</div>
+      <div class="empty-sub">
+        Click a router in the canvas to view and edit details.
+      </div>
+    </div>
   {/if}
 </div>
 
@@ -472,19 +511,59 @@
     top: 80px;
     right: 24px;
     bottom: 120px;
+
+    /* uniform sizing */
+    width: 340px;
+    min-width: 340px;
+    max-width: 340px;
+
+    box-sizing: border-box;
+
     padding: 10px 12px;
     border-radius: 12px;
     background: rgba(223, 243, 255, 0.96);
     box-shadow: 0 8px 16px rgba(15, 23, 42, 0.15);
     font-size: 11px;
-    min-width: 280px;
     overflow: auto;
     z-index: 10;
   }
 
+  .empty-state {
+    height: 100%;
+    min-height: 240px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-align: center;
+    padding: 20px 12px;
+  }
+
+  .empty-title {
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 0.3px;
+    color: #0f172a;
+  }
+
+  .empty-sub {
+    font-size: 12px;
+    opacity: 0.75;
+    color: #0f172a;
+    max-width: 260px;
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
   h3 {
     font-size: 12px;
-    margin: 0 0 6px 0;
+    margin: 0;
   }
 
   .section {
@@ -500,7 +579,7 @@
   }
 
   .subtle {
-    margin: 0 0 8px 0;
+    margin: 6px 0 0 0;
     opacity: 0.8;
   }
 
@@ -523,6 +602,7 @@
     border-radius: 10px;
     border: 1px solid rgba(15, 23, 42, 0.25);
     background: rgba(255, 255, 255, 0.95);
+    box-sizing: border-box;
   }
 
   .row {
@@ -562,6 +642,7 @@
     padding: 4px 4px;
     text-align: left;
     vertical-align: middle;
+    word-break: break-word;
   }
 
   .rt-table thead {
@@ -579,6 +660,7 @@
     border: 1px solid rgba(15, 23, 42, 0.18);
     background: rgba(255, 255, 255, 0.95);
     font-size: 11px;
+    box-sizing: border-box;
   }
 
   .add-inline {
@@ -597,6 +679,29 @@
     border: 1px solid rgba(239, 68, 68, 0.25);
     color: #7f1d1d;
     font-size: 11px;
+  }
+
+  .btn-small-primary {
+    padding: 6px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(15, 23, 42, 0.18);
+    background: rgba(2, 132, 199, 0.10);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 700;
+    color: #0f172a;
+    white-space: nowrap;
+  }
+
+  .btn-small-primary:hover {
+    background: rgba(2, 132, 199, 0.16);
+  }
+
+  .btn-icon {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 14px;
   }
 </style>
 

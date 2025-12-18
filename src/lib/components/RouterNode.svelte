@@ -13,12 +13,16 @@
   }
 
   $: label = String(data?.label ?? id);
-  $: isOptimal = !!data?.optimal;
+  $: status = String(data?.status ?? 'pre'); // "pre" | "optimal" | "nonoptimal"
 </script>
 
 <div
   class={`router-node ${selected ? 'router-node--selected' : ''} ${
-    isOptimal ? 'router-node--optimal' : ''
+    status === 'optimal'
+      ? 'router-node--optimal'
+      : status === 'nonoptimal'
+        ? 'router-node--nonoptimal'
+        : 'router-node--pre'
   }`}
   on:click={handleClick}
 >
@@ -48,11 +52,17 @@
       border-color 0.15s ease,
       box-shadow 0.15s ease;
 
-    /* default: red border */
-    border: 3px solid #ef4444;
+    border: 3px solid rgba(148, 163, 184, 0.9); /* default grey (pre) */
   }
 
-  /* turns green when router is marked optimal */
+  .router-node--pre {
+    border-color: rgba(148, 163, 184, 0.9);
+  }
+
+  .router-node--nonoptimal {
+    border-color: #ef4444;
+  }
+
   .router-node--optimal {
     border-color: #22c55e;
   }

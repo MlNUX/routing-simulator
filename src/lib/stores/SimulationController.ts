@@ -1,625 +1,1177 @@
-// src/lib/stores/SimulationController.ts
+import { Topology } from './Topology';
+import { SimulationState } from './SimulationState';
+import { Router } from './Router';
+import { Link } from './Link';
+import { EventType } from './EventType';
+import type { AlgorithmType } from './RoutingStrategieType';
+import { RoutingStrategieType } from './RoutingStrategieType';
+import { RoutingEntry } from './RoutingEntry';
+import type { EditResult, HistoryEvent } from './historyTypes';
 
-import { Topology } from "./Topology";
-import { SimulationState } from "./SimulationState";
-import { SimulationEvent } from "./SimulationEvent";
-import { MinHeap } from "./MinHeap";
-import { EventType } from "./EventType";
-import { Link } from "./Link";
-import { Router } from "./Router";
-import { EndDevice } from "./EndDevice";
-import { RoutingStrategieType, type AlgorithmType } from "./RoutingStrategieType";
-import { LinkStateStrategy } from "./LinkStateStrategy";
-import { DistanceVectorStrategy } from "./DistanceVectorStrategy";
-import { RoutingEntry } from "./RoutingEntry";
-import { RoutingTable } from "./RoutingTable";
+type ExportFormatV1 = {
+  version: 1;
+  algorithm: AlgorithmType;
+  initial: ExportTopology;
+  totalSteps: number;
+  historyEvents: HistoryEvent[];
+};
+
+type ExportFormatV2 = {
+  version: 2;
+  algorithm: AlgorithmType;
+  nodes: ExportNodeV2[];
+  links: ExportLinkV2[];
+  totalSteps: number;
+  events: ExportEventV2[];
+};
+
+type ExportEventV2 = {
+  step: number;
+  type: string; // includes "PLAY" + EventType values
+  payload: Record<string, unknown>;
+};
+
+type ExportTopology = {
+  nodes: ExportNode[];
+  links: ExportLink[];
+};
+
+type ExportNode = {
+  id: string;
+  name: string;
+  xPos: number;
+  yPos: number;
+};
+
+type ExportLink = {
+  id: string;
+  sourceId: string;
+  targetId: string;
+  weight: number;
+};
+
+type ExportNodeV2 = {
+  id: string;
+  name: string;
+  xPos: number;
+  yPos: number;
+  type?: string;
+};
+
+type ExportLinkV2 = {
+  id: string;
+  sourceId: string;
+  targetId: string;
+  weight: number;
+};
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  if (typeof v !== 'object' || v === null) return false;
+  return Object.prototype.toString.call(v) === '[object Object]';
+}
+
+function cloneTopology(topo: Topology): Topology {
+  const nodes = new Map<string, Router>();
+
+  for (const node of topo.nodes.values()) {
+    const n: any = node as any;
+    const r = new Router(String(n.id), String(n.name), Number(n.xPos), Number(n.yPos));
+
+    // clone UI state
+    r.optimalState = (n.optimalState as any) ?? 'pre';
+    r.optimal = Boolean(n.optimal ?? false);
+
+    // clone routing table (may include Infinity)
+    if (n.routingTable?.entries) {
+      for (const [dest, entry] of n.routingTable.entries.entries()) {
+        r.routingTable.entries.set(dest, new RoutingEntry(dest, entry.nextHopId, entry.cost));
+      }
+    }
+
+    nodes.set(r.id, r);
+  }
+
+  const links: Link[] = [];
+  for (const link of topo.links) {
+    const s = nodes.get(link.source.id);
+    const t = nodes.get(link.target.id);
+    if (!s || !t) continue;
+
+    const l = new Link(link.id, s, t, link.weight);
+    links.push(l);
+    s.neighbors.push(l);
+    t.neighbors.push(l);
+  }
+
+  return new Topology(nodes as unknown as Map<string, any>, links);
+}
+
+function exportToTopologyV1(exp: ExportTopology): Topology {
+  const nodes = new Map<string, Router>();
+
+  for (const n of exp.nodes) {
+    const r = new Router(n.id, n.name, n.xPos, n.yPos);
+    nodes.set(r.id, r);
+  }
+
+  const links: Link[] = [];
+  for (const l of exp.links) {
+    const s = nodes.get(l.sourceId);
+    const t = nodes.get(l.targetId);
+    if (!s || !t) continue;
+
+    const link = new Link(l.id, s, t, l.weight);
+    links.push(link);
+    s.neighbors.push(link);
+    t.neighbors.push(link);
+  }
+
+  return new Topology(nodes as unknown as Map<string, any>, links);
+}
+
+function exportToTopologyV2(nodesIn: ExportNodeV2[], linksIn: ExportLinkV2[]): Topology {
+  const nodes = new Map<string, Router>();
+
+  for (const n of nodesIn) {
+    const r = new Router(String(n.id), String(n.name ?? n.id), Number(n.xPos ?? 0), Number(n.yPos ?? 0));
+    nodes.set(r.id, r);
+  }
+
+  const links: Link[] = [];
+  for (const l of linksIn) {
+    const s = nodes.get(String(l.sourceId));
+    const t = nodes.get(String(l.targetId));
+    if (!s || !t) continue;
+
+    const link = new Link(String(l.id), s, t, Number(l.weight ?? 1));
+    links.push(link);
+    s.neighbors.push(link);
+    t.neighbors.push(link);
+  }
+
+  return new Topology(nodes as unknown as Map<string, any>, links);
+}
+
+function topologyToNodesLinksV2(topo: Topology): { nodes: ExportNodeV2[]; links: ExportLinkV2[] } {
+  const nodes: ExportNodeV2[] = [];
+  for (const n of topo.nodes.values()) {
+    const nn: any = n as any;
+    nodes.push({
+      id: String(nn.id),
+      name: String(nn.name ?? nn.id),
+      xPos: Number(nn.xPos ?? 0),
+      yPos: Number(nn.yPos ?? 0),
+      type: 'router'
+    });
+  }
+
+  const links: ExportLinkV2[] = topo.links.map((l) => ({
+    id: String(l.id),
+    sourceId: String(l.source.id),
+    targetId: String(l.target.id),
+    weight: Number(l.weight ?? 1)
+  }));
+
+  return { nodes, links };
+}
 
 export class SimulationController {
   public currentStepIndex: number;
   public history: SimulationState[];
   public topology: Topology;
 
-  private events: MinHeap<SimulationEvent>;
-  private nodeEventMap: Map<string, SimulationEvent[]>;
-  private linkEventMap: Map<string, SimulationEvent[]>;
-  private playing: boolean;
+  public totalSteps: number;
+
+  private algorithm: AlgorithmType;
+
+  private initialTopology: Topology;
+  private historyEvents: HistoryEvent[];
+
+  // Undo/redo only within the current step
+  private undoStack: HistoryEvent[];
+  private redoStack: HistoryEvent[];
 
   constructor(topology: Topology) {
-    this.topology = topology;
+    this.initialTopology = cloneTopology(topology);
+    this.topology = cloneTopology(topology);
+
+    this.algorithm = RoutingStrategieType.LINK_STATE;
+
     this.currentStepIndex = 0;
+    this.totalSteps = 1; // step 0 only
+    this.historyEvents = [];
+
+    this.undoStack = [];
+    this.redoStack = [];
+
     this.history = [];
-    this.events = new MinHeap<SimulationEvent>((a, b) => a.step - b.step);
-    this.nodeEventMap = new Map<string, SimulationEvent[]>();
-    this.linkEventMap = new Map<string, SimulationEvent[]>();
-    this.playing = false;
-
-    this.pushState();
-  }
-
-  public get running(): boolean {
-    return this.playing;
-  }
-
-  public get isPlaying(): boolean {
-    return this.playing;
-  }
-
-  private pushState(): void {
-    const state = new SimulationState(this.currentStepIndex, this.topology);
-    this.history.push(state);
-  }
-
-  public jumpToStep(step: number): SimulationState {
-    if (step < 0) {
-      step = 0;
-    }
-
-    while (this.currentStepIndex < step) {
-      this.nextStep();
-      if (this.currentStepIndex === step) {
-        break;
-      }
-    }
-
-    const found = this.history.find((s) => s.stepNumber === step);
-    return found ?? this.history[this.history.length - 1];
-  }
-
-  public play(): void {
-    this.playing = true;
-  }
-
-  public pause(): void {
-    this.playing = false;
-  }
-
-  // -------------------------- Routing-Algorithmus ---------------------------
-
-  public setAlgorithm(algo: AlgorithmType): void {
-    for (const node of this.topology.nodes.values()) {
-      if (node instanceof Router) {
-        switch (algo) {
-          case RoutingStrategieType.LINK_STATE:
-            node.setStrategy(new LinkStateStrategy());
-            break;
-          case RoutingStrategieType.DISTANCE_VECTOR:
-            node.setStrategy(new DistanceVectorStrategy(false));
-            break;
-          case RoutingStrategieType.DISTANCE_VECTOR_POISONED:
-            node.setStrategy(new DistanceVectorStrategy(true));
-            break;
-          default:
-            node.setStrategy(new LinkStateStrategy());
-            break;
-        }
-      }
-    }
+    this.rebuildHistory();
+    this.rebuildUndoRedoForCurrentStep();
   }
 
   public getTopology(): Topology {
     return this.topology;
   }
 
-  // ------------------------------- Events ------------------------------------
-
-  public addEvent(e: SimulationEvent): void {
-    this.events.insert(e);
-
-    if (e.type === EventType.NODE_FAILURE || e.type === EventType.NODE_ADDITION) {
-      const list = this.nodeEventMap.get(e.targetId) ?? [];
-      list.push(e);
-      this.nodeEventMap.set(e.targetId, list);
-    } else {
-      const list = this.linkEventMap.get(e.targetId) ?? [];
-      list.push(e);
-      this.linkEventMap.set(e.targetId, list);
-    }
+  public getTotalSteps(): number {
+    return this.totalSteps;
   }
 
-  private applyEvent(event: SimulationEvent): void {
-    switch (event.type) {
-      case EventType.NODE_FAILURE: {
-        this.deleteNode(event.targetId);
-        break;
-      }
-      case EventType.LINK_FAILURE: {
-        const link = this.findLinkById(event.targetId);
-        if (link) {
-          this.removeLinkInstance(link);
-        }
-        break;
-      }
-      case EventType.WEIGHT_CHANGE: {
-        const link = this.findLinkById(event.targetId);
-        if (link) {
-          link.setWeight(event.argument);
-        }
-        break;
-      }
-      case EventType.NODE_ADDITION:
-        break;
-      case EventType.LINK_ADDITION:
-        break;
-      default:
-        break;
-    }
+  public getAlgorithm(): AlgorithmType {
+    return this.algorithm;
   }
 
-  private findLinkById(id: string): Link | undefined {
-    return this.topology.links.find((l) => l.id === id);
+  public setAlgorithm(algo: AlgorithmType): void {
+    this.algorithm = algo;
+    this.rebuildHistory();
+    this.jumpToStep(this.currentStepIndex);
   }
 
-  private removeLinkInstance(link: Link): void {
-    this.topology.links = this.topology.links.filter((l) => l !== link);
-    link.source.neighbors = link.source.neighbors.filter((l) => l !== link);
-    link.target.neighbors = link.target.neighbors.filter((l) => l !== link);
-  }
-
-  // ------------------------ Topologie verändern ------------------------------
-
-  private generateRouterId(): string {
-    let index = 1;
-    while (this.topology.nodes.has(`R${index}`)) {
-      index++;
-    }
-    return `R${index}`;
-  }
-
-  private generateLinkId(): string {
-    let index = 1;
-    while (this.topology.links.some((l) => l.id === `L${index}`)) {
-      index++;
-    }
-    return `L${index}`;
-  }
-
-  public addNode(xPos: number, yPos: number): void {
-    const id = this.generateRouterId();
-    const router = new Router(id, `Router ${id}`, xPos, yPos);
-    this.topology.nodes.set(router.id, router);
-    this.pushState();
-  }
-
-  public addLink(sourceId: string, targetId: string, weight: number): void {
-    const source = this.topology.nodes.get(sourceId);
-    const target = this.topology.nodes.get(targetId);
-    if (!source || !target) {
-      throw new Error("Source or target node does not exist");
-    }
-
-    // Only one physical link between two nodes
-    const alreadyExists = this.topology.links.some((l) => {
-      const a = l.source === source && l.target === target;
-      const b = l.source === target && l.target === source;
-      return a || b;
-    });
-
-    if (alreadyExists) {
-      return;
-    }
-
-    const id = this.generateLinkId();
-    const link = new Link(id, source, target, weight);
-    this.topology.links.push(link);
-    source.neighbors.push(link);
-    target.neighbors.push(link);
-
-    this.pushState();
-  }
-
-  public deleteNode(nodeId: string): void {
-    const node = this.topology.nodes.get(nodeId);
-    if (!node) {
-      return;
-    }
-
-    const linksToRemove = this.topology.links.filter(
-      (link) => link.source === node || link.target === node
-    );
-    for (const link of linksToRemove) {
-      this.removeLinkInstance(link);
-    }
-
-    this.topology.nodes.delete(nodeId);
-    this.pushState();
-  }
-
-  public deleteLink(sourceId: string, targetId: string): void {
-    const source = this.topology.nodes.get(sourceId);
-    const target = this.topology.nodes.get(targetId);
-    if (!source || !target) {
-      return;
-    }
-
-    const link = this.topology.links.find(
-      (l) =>
-        (l.source === source && l.target === target) ||
-        (l.source === target && l.target === source)
-    );
-    if (!link) {
-      return;
-    }
-
-    this.removeLinkInstance(link);
-    this.pushState();
-  }
-
-  public deleteLinkById(linkId: string): void {
-    const link = this.topology.links.find((l) => l.id === linkId);
-    if (!link) {
-      return;
-    }
-
-    this.removeLinkInstance(link);
-    this.pushState();
-  }
-
-  // -------------------------- Link weight editing ----------------------------
-
-  public updateLinkWeight(linkId: string, newWeight: number): void {
-    const link = this.findLinkById(linkId);
-    if (!link) {
-      return;
-    }
-
-    if (!Number.isFinite(newWeight) || newWeight <= 0) {
-      return;
-    }
-
-    if (link.weight === newWeight) {
-      return;
-    }
-
-    link.setWeight(newWeight);
-    this.pushState();
-  }
-
-  // -------------------------- Router editing ---------------------------------
-
-  public updateNodeName(nodeId: string, newName: string): void {
-    const node = this.topology.nodes.get(nodeId);
-    if (!node) {
-      return;
-    }
-
-    const trimmed = String(newName ?? "").trim();
-    if (trimmed.length === 0) {
-      return;
-    }
-
-    if (node.name === trimmed) {
-      return;
-    }
-
-    node.name = trimmed;
-    this.pushState();
-  }
-
-  public upsertRoutingEntry(
-    routerId: string,
-    destinationId: string,
-    nextHopId: string,
-    cost: number
-  ): void {
-    const node = this.topology.nodes.get(routerId);
-    if (!(node instanceof Router)) {
-      return;
-    }
-
-    const dest = String(destinationId ?? "").trim();
-    const hop = String(nextHopId ?? "").trim();
-
-    if (dest.length === 0 || hop.length === 0) {
-      return;
-    }
-
-    if (!Number.isFinite(cost) || cost < 0) {
-      return;
-    }
-
-    const entries = node.routingTable.entries;
-    const existing = entries.get(dest);
-
-    if (!existing) {
-      entries.set(dest, new RoutingEntry(dest, hop, cost));
-      this.pushState();
-      return;
-    }
-
-    const changed = existing.nextHopId !== hop || existing.cost !== cost;
-    if (!changed) {
-      return;
-    }
-
-    existing.nextHopId = hop;
-    existing.cost = cost;
-    this.pushState();
-  }
-
-  public deleteRoutingEntry(routerId: string, destinationId: string): void {
-    const node = this.topology.nodes.get(routerId);
-    if (!(node instanceof Router)) {
-      return;
-    }
-
-    const dest = String(destinationId ?? "").trim();
-    if (dest.length === 0) {
-      return;
-    }
-
-    const existed = node.routingTable.entries.delete(dest);
-    if (existed) {
-      this.pushState();
-    }
-  }
-
-  // -------------------------- Clear everything -------------------------------
-
-  public clearNetwork(): void {
-    const linksCopy = [...this.topology.links];
-    for (const link of linksCopy) {
-      this.removeLinkInstance(link);
-    }
-
-    this.topology.links = [];
-    this.topology.nodes.clear();
-
-    this.events = new MinHeap<SimulationEvent>((a, b) => a.step - b.step);
-    this.nodeEventMap = new Map<string, SimulationEvent[]>();
-    this.linkEventMap = new Map<string, SimulationEvent[]>();
+  public resetToInitial(algo: AlgorithmType): void {
+    this.algorithm = algo;
 
     this.currentStepIndex = 0;
-    this.history = [];
-    this.playing = false;
+    this.totalSteps = 1;
+    this.historyEvents = [];
 
-    this.pushState();
+    this.clearUndoRedoStacks();
+
+    this.rebuildHistory();
+    this.jumpToStep(0);
   }
 
-  // -------------------------- Persist node movement --------------------------
-
-  public moveNode(nodeId: string, xPos: number, yPos: number): void {
-    const node = this.topology.nodes.get(nodeId);
-    if (!node) {
-      return;
-    }
-
-    if (!Number.isFinite(xPos) || !Number.isFinite(yPos)) {
-      return;
-    }
-
-    if (node.xPos === xPos && node.yPos === yPos) {
-      return;
-    }
-
-    node.xPos = xPos;
-    node.yPos = yPos;
-
-    this.pushState();
+  public getEventsForStep(step: number): HistoryEvent[] {
+    const s = this.history[step];
+    return s ? s.events : [];
   }
 
-  public moveNodes(updates: { id: string; xPos: number; yPos: number }[]): void {
-    let changed = false;
-
-    for (const u of updates) {
-      const node = this.topology.nodes.get(u.id);
-      if (!node) continue;
-      if (!Number.isFinite(u.xPos) || !Number.isFinite(u.yPos)) continue;
-
-      if (node.xPos !== u.xPos || node.yPos !== u.yPos) {
-        node.xPos = u.xPos;
-        node.yPos = u.yPos;
-        changed = true;
-      }
-    }
-
-    if (changed) {
-      this.pushState();
-    }
+  public canUndo(): boolean {
+    return this.undoStack.length > 0;
   }
 
-  // ---------------------------- Simulationsschritt ---------------------------
+  public canRedo(): boolean {
+    return this.redoStack.length > 0;
+  }
 
-  public nextStep(): void {
-    this.currentStepIndex++;
+  public undo(): void {
+    if (!this.canUndo()) return;
 
-    while (true) {
-      const peek = this.events.peek();
-      if (!peek || peek.step > this.currentStepIndex) {
+    const last = this.undoStack[this.undoStack.length - 1];
+
+    for (let i = this.historyEvents.length - 1; i >= 0; i--) {
+      const e = this.historyEvents[i];
+      if (e.step === last.step && e.type === last.type && e === last) {
+        this.historyEvents.splice(i, 1);
         break;
       }
-      const ev = this.events.extractMin();
-      if (ev) {
-        this.applyEvent(ev);
-      }
     }
 
-    for (const node of this.topology.nodes.values()) {
-      if (node instanceof Router && node.strategy) {
-        node.strategy.executeStep(node, this.topology);
-      }
-    }
+    this.undoStack.pop();
+    this.redoStack.push(last);
 
-    this.pushState();
+    this.rebuildHistory();
+    this.jumpToStep(this.currentStepIndex);
   }
 
-  // ------------------------------ JSON Import/Export -------------------------
+  public redo(): void {
+    if (!this.canRedo()) return;
 
-  public importJson(jsonString: string): void {
-    const data = JSON.parse(jsonString);
+    const e = this.redoStack.pop() as HistoryEvent;
+    this.historyEvents.push(e);
+    this.undoStack.push(e);
 
-    const newTopology = new Topology();
+    this.rebuildHistory();
+    this.jumpToStep(this.currentStepIndex);
+  }
 
-    if (Array.isArray(data.nodes)) {
-      for (const raw of data.nodes) {
-        if (!raw || typeof raw.id !== "string") {
+  public jumpToStep(step: number): SimulationState {
+    const clamped = Math.max(0, Math.min(step, this.totalSteps - 1));
+    this.currentStepIndex = clamped;
+
+    const state = this.history[clamped];
+    if (state) {
+      this.topology = cloneTopology(state.topologyState);
+    }
+
+    this.rebuildUndoRedoForCurrentStep();
+    return state ?? this.history[this.history.length - 1];
+  }
+
+  public playOneStep(): void {
+    if (this.currentStepIndex < this.totalSteps - 1) {
+      this.truncateFutureTo(this.currentStepIndex);
+    }
+
+    this.clearUndoRedoStacks();
+
+    this.totalSteps += 1;
+    this.rebuildHistory();
+    this.jumpToStep(this.currentStepIndex + 1);
+  }
+
+  private addHistoryEvent(event: HistoryEvent): EditResult {
+    if (this.currentStepIndex < this.totalSteps - 1) {
+      this.truncateFutureTo(this.currentStepIndex);
+    }
+
+    this.historyEvents.push(event);
+
+    this.undoStack.push(event);
+    this.redoStack = [];
+
+    this.rebuildHistory();
+    this.jumpToStep(this.currentStepIndex);
+
+    return { applied: true };
+  }
+
+  private truncateFutureTo(step: number): void {
+    const keepSteps = step + 1;
+    this.totalSteps = Math.max(1, keepSteps);
+    this.historyEvents = this.historyEvents.filter((e) => e.step <= step);
+  }
+
+  private clearUndoRedoStacks(): void {
+    this.undoStack = [];
+    this.redoStack = [];
+  }
+
+  private rebuildUndoRedoForCurrentStep(): void {
+    const step = this.currentStepIndex;
+    this.undoStack = this.historyEvents.filter((e) => e.step === step);
+    this.redoStack = [];
+  }
+
+  // ---------------------------------------------------------------------------
+  // History building + algorithm per step
+  // ---------------------------------------------------------------------------
+
+  private rebuildHistory(): void {
+    const states: SimulationState[] = [];
+
+    // step 0: start from initial, apply step0 edits, then initialize ALL routing tables to ∞ (self=0).
+    // No algorithm is considered to have run at step 0.
+    const step0Topo = cloneTopology(this.initialTopology);
+    const step0Events = this.getRawEventsForStep(0);
+    this.applyEventsToTopology(step0Topo, step0Events);
+    this.initializeRoutingTablesBlank(step0Topo);
+    this.markRoutersPre(step0Topo);
+    states.push(new SimulationState(0, step0Topo, step0Events));
+
+    for (let step = 1; step < this.totalSteps; step++) {
+      const prevState = states[step - 1];
+      const prevTopo = prevState.topologyState;
+
+      const topo = cloneTopology(prevTopo);
+
+      const events = this.getRawEventsForStep(step);
+      this.applyEventsToTopology(topo, events);
+
+      this.runAlgorithmOneRound(step, topo, prevTopo);
+
+      this.markOptimalityAgainstDijkstra(topo);
+
+      states.push(new SimulationState(step, topo, events));
+    }
+
+    this.history = states;
+
+    const current = this.history[this.currentStepIndex];
+    if (current) {
+      this.topology = cloneTopology(current.topologyState);
+    }
+  }
+
+  private getRawEventsForStep(step: number): HistoryEvent[] {
+    return this.historyEvents.filter((e) => e.step === step);
+  }
+
+  private applyEventsToTopology(topo: Topology, events: HistoryEvent[]): void {
+    for (const e of events) {
+      if (e.type === EventType.NODE_ADDITION) {
+        const id = String((e.payload as any).nodeId ?? '');
+        const name = String((e.payload as any).name ?? id);
+        const xPos = Number((e.payload as any).xPos ?? 0);
+        const yPos = Number((e.payload as any).yPos ?? 0);
+        const router = new Router(id, name, xPos, yPos);
+        topo.nodes.set(id, router);
+      } else if (e.type === EventType.NODE_DELETION) {
+        const id = String((e.payload as any).nodeId ?? '');
+        topo.nodes.delete(id);
+
+        topo.links = topo.links.filter((l) => l.source.id !== id && l.target.id !== id);
+        for (const n of topo.nodes.values()) {
+          (n as any).neighbors = (n as any).neighbors.filter(
+            (l: any) => l.source.id !== id && l.target.id !== id
+          );
+        }
+      } else if (e.type === EventType.LINK_ADDITION) {
+        const id = String((e.payload as any).linkId ?? '');
+        const sourceId = String((e.payload as any).sourceId ?? '');
+        const targetId = String((e.payload as any).targetId ?? '');
+        const weight = Number((e.payload as any).weight ?? 1);
+
+        const s = topo.nodes.get(sourceId) as any;
+        const t = topo.nodes.get(targetId) as any;
+        if (!s || !t) continue;
+
+        const link = new Link(id, s, t, weight);
+        topo.links.push(link);
+        s.neighbors.push(link);
+        t.neighbors.push(link);
+      } else if (e.type === EventType.LINK_DELETION) {
+        const linkId = String((e.payload as any).linkId ?? '');
+        topo.links = topo.links.filter((l) => l.id !== linkId);
+        for (const n of topo.nodes.values()) {
+          (n as any).neighbors = (n as any).neighbors.filter((l: any) => l.id !== linkId);
+        }
+      } else if (e.type === EventType.WEIGHT_CHANGE) {
+        const linkId = String((e.payload as any).linkId ?? '');
+        const weight = Number((e.payload as any).weight ?? 1);
+
+        const link = topo.links.find((l) => l.id === linkId);
+        if (link) link.weight = weight;
+      } else if (e.type === EventType.NODE_RENAME) {
+        const nodeId = String((e.payload as any).nodeId ?? '');
+        const name = String((e.payload as any).name ?? '');
+        const node = topo.nodes.get(nodeId) as any;
+        if (node) node.name = name;
+      } else if (e.type === EventType.NODE_MOVE) {
+        const nodeId = String((e.payload as any).nodeId ?? '');
+        const xPos = Number((e.payload as any).xPos ?? 0);
+        const yPos = Number((e.payload as any).yPos ?? 0);
+        const node = topo.nodes.get(nodeId) as any;
+        if (node) {
+          node.xPos = xPos;
+          node.yPos = yPos;
+        }
+      } else if (e.type === EventType.NODES_MOVE) {
+        const updates: any[] = Array.isArray((e.payload as any).updates)
+          ? ((e.payload as any).updates as any[])
+          : [];
+        for (const u of updates) {
+          const id = String(u.id ?? '');
+          const node = topo.nodes.get(id) as any;
+          if (!node) continue;
+          node.xPos = Number(u.xPos ?? 0);
+          node.yPos = Number(u.yPos ?? 0);
+        }
+      } else if (e.type === EventType.NETWORK_CLEAR) {
+        topo.nodes.clear();
+        topo.links = [];
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Step 0 routing table initialization (pedagogical "freshly spawned router")
+  // ---------------------------------------------------------------------------
+
+  private initializeRoutingTablesBlank(topo: Topology): void {
+    const destIds = Array.from(topo.nodes.values())
+      .map((n: any) => String(n?.id ?? ''))
+      .filter((id) => id.length > 0)
+      .sort((a, b) => a.localeCompare(b));
+
+    for (const n of topo.nodes.values()) {
+      if (!(n instanceof Router)) continue;
+
+      const r = n as Router;
+      r.routingTable.entries.clear();
+
+      for (const destId of destIds) {
+        if (destId === String(r.id)) {
+          r.routingTable.entries.set(destId, new RoutingEntry(destId, String(r.id), 0));
+        } else {
+          r.routingTable.entries.set(destId, new RoutingEntry(destId, '', Number.POSITIVE_INFINITY));
+        }
+      }
+    }
+  }
+
+  private runAlgorithmOneRound(step: number, topo: Topology, prevTopo: Topology): void {
+    if (this.algorithm === RoutingStrategieType.LINK_STATE) {
+      this.runLinkState(topo);
+      return;
+    }
+
+    const poisoned = this.algorithm === RoutingStrategieType.DISTANCE_VECTOR_POISONED;
+    this.runDistanceVectorRound(topo, prevTopo, poisoned);
+
+    void step;
+  }
+
+  private getAllRouterIds(topo: Topology): string[] {
+    const ids: string[] = [];
+    for (const n of topo.nodes.values()) {
+      ids.push(String((n as any).id));
+    }
+    ids.sort((a, b) => a.localeCompare(b));
+    return ids;
+  }
+
+  // ---------------- Link-State (Dijkstra for each router) -------------------
+
+  private runLinkState(topo: Topology): void {
+    const ids = this.getAllRouterIds(topo);
+
+    for (const node of topo.nodes.values()) {
+      const router = node as unknown as Router;
+
+      const dist = new Map<string, number>();
+      const prev = new Map<string, string | null>();
+      const visited = new Set<string>();
+
+      for (const id of ids) {
+        dist.set(id, Number.POSITIVE_INFINITY);
+        prev.set(id, null);
+      }
+      dist.set((router as any).id, 0);
+
+      while (visited.size < ids.length) {
+        let currentId: string | null = null;
+        let best = Number.POSITIVE_INFINITY;
+
+        for (const id of ids) {
+          const d = dist.get(id) ?? Number.POSITIVE_INFINITY;
+          if (!visited.has(id) && d < best) {
+            best = d;
+            currentId = id;
+          }
+        }
+
+        if (currentId === null || best === Number.POSITIVE_INFINITY) break;
+
+        visited.add(currentId);
+
+        const currentNode = topo.nodes.get(currentId) as any;
+        if (!currentNode) continue;
+
+        for (const link of currentNode.neighbors) {
+          const neighbor = link.source === currentNode ? link.target : link.source;
+          const neighborId = String(neighbor.id);
+
+          if (visited.has(neighborId)) continue;
+
+          const alt = (dist.get(currentId) ?? Number.POSITIVE_INFINITY) + Number(link.weight ?? 0);
+          if (alt < (dist.get(neighborId) ?? Number.POSITIVE_INFINITY)) {
+            dist.set(neighborId, alt);
+            prev.set(neighborId, currentId);
+          }
+        }
+      }
+
+      (router as any).routingTable.entries.clear();
+
+      for (const destId of ids) {
+        if (destId === (router as any).id) {
+          (router as any).routingTable.entries.set(destId, new RoutingEntry(destId, (router as any).id, 0));
           continue;
         }
 
-        const id: string = raw.id;
-        const name: string = raw.name ?? raw.id;
-        const xPos: number = typeof raw.xPos === "number" ? raw.xPos : 0;
-        const yPos: number = typeof raw.yPos === "number" ? raw.yPos : 0;
-        const type: string = raw.type ?? "router";
-
-        let node: Router | EndDevice;
-
-        if (type === "endDevice") {
-          node = new EndDevice(id, name, xPos, yPos);
-        } else {
-          const rt = new RoutingTable();
-
-          const rawRt = raw.routingTable;
-          const rawEntries = rawRt?.entries;
-
-          if (Array.isArray(rawEntries)) {
-            for (const e of rawEntries) {
-              if (!e) continue;
-              const dest = String(e.destinationId ?? "").trim();
-              const hop = String(e.nextHopId ?? "").trim();
-              const cost = Number(e.cost ?? 0);
-
-              if (dest.length === 0 || hop.length === 0) continue;
-              if (!Number.isFinite(cost) || cost < 0) continue;
-
-              rt.entries.set(dest, new RoutingEntry(dest, hop, cost));
-            }
-          }
-
-          node = new Router(id, name, xPos, yPos, rt);
+        const cost = dist.get(destId) ?? Number.POSITIVE_INFINITY;
+        if (cost === Number.POSITIVE_INFINITY) {
+          (router as any).routingTable.entries.set(destId, new RoutingEntry(destId, '', Number.POSITIVE_INFINITY));
+          continue;
         }
 
-        newTopology.nodes.set(id, node);
+        const hop = this.getFirstHopOnPath((router as any).id, destId, prev);
+        (router as any).routingTable.entries.set(destId, new RoutingEntry(destId, hop ?? '', cost));
       }
     }
-
-    let linkIndex = 1;
-    const nextLinkId = (): string => {
-      while (newTopology.links.some((l) => l.id === `L${linkIndex}`)) {
-        linkIndex++;
-      }
-      const id = `L${linkIndex}`;
-      linkIndex++;
-      return id;
-    };
-
-    if (Array.isArray(data.links)) {
-      for (const raw of data.links) {
-        if (!raw) continue;
-
-        const rawId: unknown = raw.id;
-        let id: string =
-          typeof rawId === "string" && rawId.trim().length > 0 ? rawId.trim() : "";
-
-        if (id === "" || newTopology.links.some((l) => l.id === id)) {
-          id = nextLinkId();
-        }
-
-        const sourceId: string = raw.sourceId;
-        const targetId: string = raw.targetId;
-        const weight: number = typeof raw.weight === "number" ? raw.weight : 1;
-
-        const source = newTopology.nodes.get(sourceId);
-        const target = newTopology.nodes.get(targetId);
-        if (!source || !target) continue;
-
-        const link = new Link(id, source, target, weight);
-        newTopology.links.push(link);
-        source.neighbors.push(link);
-        target.neighbors.push(link);
-      }
-    }
-
-    this.topology = newTopology;
-
-    this.events = new MinHeap<SimulationEvent>((a, b) => a.step - b.step);
-    this.nodeEventMap = new Map<string, SimulationEvent[]>();
-    this.linkEventMap = new Map<string, SimulationEvent[]>();
-
-    if (Array.isArray(data.events)) {
-      for (const raw of data.events) {
-        if (!raw) continue;
-
-        const step: number = typeof raw.step === "number" ? raw.step : 0;
-        const type: EventType = raw.type as EventType;
-        const targetId: string = raw.targetId;
-        const argument: number = typeof raw.argument === "number" ? raw.argument : 0;
-
-        const e = new SimulationEvent(step, type, targetId, argument);
-        this.addEvent(e);
-      }
-    }
-
-    this.currentStepIndex = 0;
-    this.history = [];
-    this.playing = false;
-    this.pushState();
   }
 
-  public exportJson(): string {
-    const nodes = Array.from(this.topology.nodes.values()).map((n) => {
+  private getFirstHopOnPath(sourceId: string, destId: string, prev: Map<string, string | null>): string | null {
+    let currentId: string | null = destId;
+    let parentId = prev.get(currentId) ?? null;
+
+    if (parentId === null) return null;
+
+    while (parentId !== null && parentId !== sourceId) {
+      currentId = parentId;
+      parentId = prev.get(currentId) ?? null;
+    }
+
+    if (parentId === sourceId && currentId !== null) return currentId;
+    return null;
+  }
+
+  // ---------------- Distance-Vector (synchronous round) -------------------
+
+  private runDistanceVectorRound(topo: Topology, prevTopo: Topology, poisoned: boolean): void {
+    const ids = this.getAllRouterIds(topo);
+
+    const prevTables = new Map<string, Map<string, RoutingEntry>>();
+    for (const [id, n] of prevTopo.nodes.entries()) {
+      const r = n as unknown as Router;
+      prevTables.set(String(id), (r as any).routingTable.entries);
+    }
+
+    for (const node of topo.nodes.values()) {
+      const router = node as unknown as Router;
+      const selfId = String((router as any).id);
+
+      const prevSelf = prevTables.get(selfId);
+
+      const nextEntries = new Map<string, RoutingEntry>();
+
+      for (const destId of ids) {
+        if (destId === selfId) {
+          nextEntries.set(destId, new RoutingEntry(destId, selfId, 0));
+          continue;
+        }
+
+        const prevEntry = prevSelf ? prevSelf.get(destId) : undefined;
+        const baseCost = prevEntry ? prevEntry.cost : Number.POSITIVE_INFINITY;
+        const baseHop = prevEntry ? prevEntry.nextHopId : '';
+
+        let bestCost = baseCost;
+        let bestHop = baseHop;
+
+        const direct = this.getDirectLinkCost(router as any, destId);
+        if (direct !== null && direct < bestCost) {
+          bestCost = direct;
+          bestHop = destId;
+        }
+
+        for (const link of (router as any).neighbors) {
+          const neighbor = link.source === router ? link.target : link.source;
+          const neighborId = String(neighbor.id);
+
+          const linkCost = Number(link.weight ?? 0);
+
+          const neighborTable = prevTables.get(neighborId);
+          const neighborEntry = neighborTable ? neighborTable.get(destId) : undefined;
+
+          let neighborCost = neighborEntry ? neighborEntry.cost : Number.POSITIVE_INFINITY;
+
+          if (poisoned && neighborEntry && String(neighborEntry.nextHopId) === selfId) {
+            neighborCost = Number.POSITIVE_INFINITY;
+          }
+
+          const via = linkCost + neighborCost;
+          if (via < bestCost) {
+            bestCost = via;
+            bestHop = neighborId;
+          }
+        }
+
+        nextEntries.set(destId, new RoutingEntry(destId, bestHop ?? '', bestCost));
+      }
+
+      (router as any).routingTable.entries.clear();
+      for (const [destId, entry] of nextEntries.entries()) {
+        (router as any).routingTable.entries.set(destId, entry);
+      }
+    }
+  }
+
+  private getDirectLinkCost(router: Router, neighborId: string): number | null {
+    for (const link of (router as any).neighbors) {
+      const other = link.source === router ? link.target : link.source;
+      if (String((other as any).id) === String(neighborId)) {
+        return Number(link.weight ?? 0);
+      }
+    }
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Optimality markers (UI)
+  // ---------------------------------------------------------------------------
+
+  private markRoutersPre(topo: Topology): void {
+    for (const n of topo.nodes.values()) {
       if (n instanceof Router) {
-        const rtEntries = Array.from(n.routingTable.entries.values()).map((e) => ({
-          destinationId: e.destinationId,
-          nextHopId: e.nextHopId,
-          cost: e.cost
-        }));
+        n.optimalState = 'pre';
+        n.optimal = false;
+      }
+    }
+  }
 
-        return {
-          id: n.id,
-          name: n.name,
-          xPos: n.xPos,
-          yPos: n.yPos,
-          type: "router",
-          routingTable: { entries: rtEntries }
-        };
+  private markOptimalityAgainstDijkstra(topo: Topology): void {
+    const ids = this.getAllRouterIds(topo);
+
+    for (const n of topo.nodes.values()) {
+      if (!(n instanceof Router)) continue;
+
+      const dist = this.computeDijkstraDistances(topo, String(n.id), ids);
+
+      let ok = true;
+
+      for (const destId of ids) {
+        const expected = dist.get(destId) ?? Number.POSITIVE_INFINITY;
+
+        const entry = n.routingTable.entries.get(destId);
+        const actualRaw = entry ? entry.cost : Number.POSITIVE_INFINITY;
+
+        const actual = Number.isFinite(actualRaw) ? Number(actualRaw) : Number.POSITIVE_INFINITY;
+
+        const expInf = expected === Number.POSITIVE_INFINITY;
+        const actInf = actual === Number.POSITIVE_INFINITY;
+
+        if (expInf !== actInf) {
+          ok = false;
+          break;
+        }
+        if (!expInf && actual !== expected) {
+          ok = false;
+          break;
+        }
       }
 
-      return {
-        id: n.id,
-        name: n.name,
-        xPos: n.xPos,
-        yPos: n.yPos,
-        type: n instanceof EndDevice ? "endDevice" : "router"
-      };
+      n.optimalState = ok ? 'optimal' : 'nonoptimal';
+      n.optimal = ok;
+    }
+  }
+
+  private computeDijkstraDistances(topo: Topology, sourceId: string, ids: string[]): Map<string, number> {
+    const dist = new Map<string, number>();
+    const visited = new Set<string>();
+
+    for (const id of ids) dist.set(id, Number.POSITIVE_INFINITY);
+    dist.set(sourceId, 0);
+
+    while (visited.size < ids.length) {
+      let currentId: string | null = null;
+      let best = Number.POSITIVE_INFINITY;
+
+      for (const id of ids) {
+        const d = dist.get(id) ?? Number.POSITIVE_INFINITY;
+        if (!visited.has(id) && d < best) {
+          best = d;
+          currentId = id;
+        }
+      }
+
+      if (currentId === null || best === Number.POSITIVE_INFINITY) break;
+
+      visited.add(currentId);
+
+      const currentNode = topo.nodes.get(currentId) as any;
+      if (!currentNode) continue;
+
+      for (const link of currentNode.neighbors ?? []) {
+        const neighbor = link.source === currentNode ? link.target : link.source;
+        const neighborId = String(neighbor.id);
+
+        if (visited.has(neighborId)) continue;
+
+        const alt = (dist.get(currentId) ?? Number.POSITIVE_INFINITY) + Number(link.weight ?? 0);
+        if (alt < (dist.get(neighborId) ?? Number.POSITIVE_INFINITY)) {
+          dist.set(neighborId, alt);
+        }
+      }
+    }
+
+    return dist;
+  }
+
+  // ---------------------------------------------------------------------------
+  // IDs
+  // ---------------------------------------------------------------------------
+
+  private generateRouterId(topo: Topology): string {
+    let i = 1;
+    while (topo.nodes.has(`R${i}`)) i++;
+    return `R${i}`;
+  }
+
+  private generateLinkId(topo: Topology): string {
+    let i = 1;
+    const used = new Set(topo.links.map((l) => l.id));
+    while (used.has(`L${i}`)) i++;
+    return `L${i}`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public edits
+  // ---------------------------------------------------------------------------
+
+  public addNode(xPos: number, yPos: number): EditResult {
+    const id = this.generateRouterId(this.topology);
+    return this.addHistoryEvent({
+      step: this.currentStepIndex,
+      type: EventType.NODE_ADDITION,
+      payload: { nodeId: id, name: id, xPos, yPos }
     });
+  }
 
-    const links = this.topology.links.map((l) => ({
-      id: l.id,
-      sourceId: l.source.id,
-      targetId: l.target.id,
-      weight: l.weight
-    }));
+  public addLink(sourceId: string, targetId: string, weight: number): EditResult {
+    const linkId = this.generateLinkId(this.topology);
+    return this.addHistoryEvent({
+      step: this.currentStepIndex,
+      type: EventType.LINK_ADDITION,
+      payload: { linkId, sourceId, targetId, weight }
+    });
+  }
 
-    const events: {
-      step: number;
-      type: EventType;
-      targetId: string;
-      argument: number;
-    }[] = [];
+  public deleteNode(nodeId: string): EditResult {
+    return this.addHistoryEvent({
+      step: this.currentStepIndex,
+      type: EventType.NODE_DELETION,
+      payload: { nodeId }
+    });
+  }
 
-    for (const list of this.nodeEventMap.values()) {
-      for (const e of list) {
+  public deleteLink(sourceId: string, targetId: string): EditResult {
+    const link = this.topology.links.find(
+      (l) =>
+        (l.source.id === sourceId && l.target.id === targetId) ||
+        (l.source.id === targetId && l.target.id === sourceId)
+    );
+
+    if (!link) return { applied: true };
+
+    return this.deleteLinkById(link.id);
+  }
+
+  public deleteLinkById(linkId: string): EditResult {
+    return this.addHistoryEvent({
+      step: this.currentStepIndex,
+      type: EventType.LINK_DELETION,
+      payload: { linkId }
+    });
+  }
+
+  public updateLinkWeight(linkId: string, weight: number): EditResult {
+    return this.addHistoryEvent({
+      step: this.currentStepIndex,
+      type: EventType.WEIGHT_CHANGE,
+      payload: { linkId, weight }
+    });
+  }
+
+  public moveNode(nodeId: string, xPos: number, yPos: number): EditResult {
+    return this.addHistoryEvent({
+      step: this.currentStepIndex,
+      type: EventType.NODE_MOVE,
+      payload: { nodeId, xPos, yPos }
+    });
+  }
+
+  public moveNodes(updates: { id: string; xPos: number; yPos: number }[]): EditResult {
+    return this.addHistoryEvent({
+      step: this.currentStepIndex,
+      type: EventType.NODES_MOVE,
+      payload: { updates }
+    });
+  }
+
+  public updateNodeName(nodeId: string, name: string): EditResult {
+    return this.addHistoryEvent({
+      step: this.currentStepIndex,
+      type: EventType.NODE_RENAME,
+      payload: { nodeId, name }
+    });
+  }
+
+  public clearNetwork(): EditResult {
+    return this.addHistoryEvent({
+      step: this.currentStepIndex,
+      type: EventType.NETWORK_CLEAR,
+      payload: {}
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Path finding for "Send packet"
+  // ---------------------------------------------------------------------------
+
+  public getLinkIdBetween(aId: string, bId: string): string | null {
+    for (const l of this.topology.links) {
+      const s = String(l.source.id);
+      const t = String(l.target.id);
+      if ((s === aId && t === bId) || (s === bId && t === aId)) {
+        return String(l.id);
+      }
+    }
+    return null;
+  }
+
+  public nodePathToEdgeIds(path: string[]): string[] {
+    const out: string[] = [];
+    for (let i = 0; i + 1 < path.length; i++) {
+      const a = String(path[i]);
+      const b = String(path[i + 1]);
+      const id = this.getLinkIdBetween(a, b);
+      if (id) out.push(id);
+    }
+    return out;
+  }
+
+  public getShortestPath(sourceId: string, targetId: string): string[] {
+    const ids = this.getAllRouterIds(this.topology);
+    if (!this.topology.nodes.has(sourceId) || !this.topology.nodes.has(targetId)) return [];
+    if (sourceId === targetId) return [sourceId];
+
+    const dist = new Map<string, number>();
+    const prev = new Map<string, string | null>();
+    const visited = new Set<string>();
+
+    for (const id of ids) {
+      dist.set(id, Number.POSITIVE_INFINITY);
+      prev.set(id, null);
+    }
+    dist.set(sourceId, 0);
+
+    while (visited.size < ids.length) {
+      let currentId: string | null = null;
+      let best = Number.POSITIVE_INFINITY;
+
+      for (const id of ids) {
+        const d = dist.get(id) ?? Number.POSITIVE_INFINITY;
+        if (!visited.has(id) && d < best) {
+          best = d;
+          currentId = id;
+        }
+      }
+
+      if (currentId === null || best === Number.POSITIVE_INFINITY) break;
+      if (currentId === targetId) break;
+
+      visited.add(currentId);
+
+      const currentNode: any = this.topology.nodes.get(currentId);
+      if (!currentNode) continue;
+
+      for (const link of currentNode.neighbors ?? []) {
+        const neighbor = link.source === currentNode ? link.target : link.source;
+        const neighborId = String(neighbor.id);
+
+        if (visited.has(neighborId)) continue;
+
+        const alt = (dist.get(currentId) ?? Number.POSITIVE_INFINITY) + Number(link.weight ?? 0);
+        if (alt < (dist.get(neighborId) ?? Number.POSITIVE_INFINITY)) {
+          dist.set(neighborId, alt);
+          prev.set(neighborId, currentId);
+        }
+      }
+    }
+
+    const d = dist.get(targetId) ?? Number.POSITIVE_INFINITY;
+    if (d === Number.POSITIVE_INFINITY) return [];
+
+    const path: string[] = [];
+    let cur: string | null = targetId;
+
+    while (cur !== null) {
+      path.push(cur);
+      cur = prev.get(cur) ?? null;
+    }
+
+    path.reverse();
+    if (path.length > 0 && path[0] === sourceId) return path;
+    return [];
+  }
+
+  public getForwardingPath(sourceId: string, targetId: string): { path: string[]; reached: boolean } {
+    if (!this.topology.nodes.has(sourceId) || !this.topology.nodes.has(targetId)) {
+      return { path: [], reached: false };
+    }
+    if (sourceId === targetId) return { path: [sourceId], reached: true };
+
+    const maxHops = Math.max(3, this.topology.nodes.size + 5);
+
+    const path: string[] = [sourceId];
+    const visited = new Set<string>();
+    visited.add(sourceId);
+
+    let currentId = sourceId;
+
+    for (let i = 0; i < maxHops; i++) {
+      if (currentId === targetId) {
+        return { path, reached: true };
+      }
+
+      const node = this.topology.nodes.get(currentId);
+      if (!(node instanceof Router)) {
+        return { path, reached: false };
+      }
+
+      const entry = node.routingTable.entries.get(targetId);
+      const nextHopId = String(entry?.nextHopId ?? '').trim();
+
+      if (nextHopId.length === 0 || nextHopId === currentId) {
+        return { path, reached: false };
+      }
+
+      const linkId = this.getLinkIdBetween(currentId, nextHopId);
+      if (!linkId) {
+        return { path, reached: false };
+      }
+
+      path.push(nextHopId);
+
+      if (nextHopId === targetId) {
+        return { path, reached: true };
+      }
+
+      if (visited.has(nextHopId)) {
+        return { path, reached: false };
+      }
+
+      visited.add(nextHopId);
+      currentId = nextHopId;
+    }
+
+    return { path, reached: false };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Export / Import (v2 + legacy + v1)
+  // ---------------------------------------------------------------------------
+
+  public exportJson(): string {
+    const { nodes, links } = topologyToNodesLinksV2(this.initialTopology);
+
+    const events: ExportEventV2[] = [];
+
+    for (let step = 0; step < this.totalSteps; step++) {
+      if (step > 0) {
+        events.push({ step, type: 'PLAY', payload: {} });
+      }
+
+      for (const e of this.historyEvents) {
+        if (Number(e.step) !== step) continue;
         events.push({
-          step: e.step,
-          type: e.type,
-          targetId: e.targetId,
-          argument: e.argument
+          step,
+          type: String(e.type),
+          payload: isPlainObject(e.payload) ? e.payload : {}
         });
       }
     }
 
-    for (const list of this.linkEventMap.values()) {
-      for (const e of list) {
-        events.push({
-          step: e.step,
-          type: e.type,
-          targetId: e.targetId,
-          argument: e.argument
-        });
-      }
+    const doc: ExportFormatV2 = {
+      version: 2,
+      algorithm: this.algorithm,
+      nodes,
+      links,
+      totalSteps: this.totalSteps,
+      events
+    };
+
+    return JSON.stringify(doc, null, 2);
+  }
+
+  public importJson(jsonString: string): EditResult {
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonString);
+    } catch {
+      return { applied: false, warning: 'Invalid JSON.' };
     }
 
-    return JSON.stringify({ nodes, links, events }, null, 2);
+    // v1
+    if (parsed && parsed.version === 1) {
+      const doc = parsed as ExportFormatV1;
+
+      this.algorithm = doc.algorithm;
+      this.initialTopology = exportToTopologyV1(doc.initial);
+      this.totalSteps = Math.max(1, Number(doc.totalSteps ?? 1));
+      this.historyEvents = Array.isArray(doc.historyEvents) ? doc.historyEvents : [];
+
+      this.currentStepIndex = 0;
+      this.clearUndoRedoStacks();
+
+      this.rebuildHistory();
+      this.jumpToStep(0);
+
+      return { applied: true };
+    }
+
+    // v2 / legacy
+    const hasNodes = Array.isArray(parsed?.nodes);
+    const hasLinks = Array.isArray(parsed?.links);
+    if (!hasNodes || !hasLinks) {
+      return { applied: false, warning: 'Unsupported JSON format.' };
+    }
+
+    const algoRaw = parsed?.algorithm;
+    const algoStr = typeof algoRaw === 'string' ? algoRaw : '';
+    const algo: AlgorithmType =
+      algoStr === RoutingStrategieType.LINK_STATE ||
+      algoStr === RoutingStrategieType.DISTANCE_VECTOR ||
+      algoStr === RoutingStrategieType.DISTANCE_VECTOR_POISONED
+        ? (algoStr as AlgorithmType)
+        : RoutingStrategieType.LINK_STATE;
+
+    const nodesIn = parsed.nodes as any[];
+    const linksIn = parsed.links as any[];
+
+    const topo = exportToTopologyV2(
+      nodesIn.map((n) => ({
+        id: String(n?.id ?? ''),
+        name: String(n?.name ?? n?.id ?? ''),
+        xPos: Number(n?.xPos ?? 0),
+        yPos: Number(n?.yPos ?? 0),
+        type: typeof n?.type === 'string' ? String(n.type) : undefined
+      })),
+      linksIn.map((l) => ({
+        id: String(l?.id ?? ''),
+        sourceId: String(l?.sourceId ?? ''),
+        targetId: String(l?.targetId ?? ''),
+        weight: Number(l?.weight ?? 1)
+      }))
+    );
+
+    const rawEvents: any[] = Array.isArray(parsed?.events) ? parsed.events : [];
+    const validTypes = new Set<string>(Object.values(EventType));
+
+    const historyEvents: HistoryEvent[] = [];
+    let maxStep = 0;
+    let ignored = 0;
+
+    for (const ev of rawEvents) {
+      const step = Number(ev?.step ?? 0);
+      const type = String(ev?.type ?? '');
+      const payloadRaw = ev?.payload;
+
+      if (Number.isFinite(step)) {
+        if (step > maxStep) maxStep = step;
+      }
+
+      if (type === 'PLAY') continue;
+
+      if (!validTypes.has(type)) {
+        ignored += 1;
+        continue;
+      }
+
+      const payload: Record<string, unknown> = isPlainObject(payloadRaw) ? payloadRaw : {};
+
+      historyEvents.push({
+        step: Number.isFinite(step) ? step : 0,
+        type: type as EventType,
+        payload
+      });
+    }
+
+    const explicitTotalSteps = Number(parsed?.totalSteps ?? NaN);
+    const totalSteps =
+      Number.isFinite(explicitTotalSteps) && explicitTotalSteps > 0
+        ? Math.floor(explicitTotalSteps)
+        : Math.max(1, maxStep + 1);
+
+    this.algorithm = algo;
+    this.initialTopology = topo;
+    this.totalSteps = totalSteps;
+    this.historyEvents = historyEvents;
+
+    this.currentStepIndex = 0;
+    this.clearUndoRedoStacks();
+
+    this.rebuildHistory();
+    this.jumpToStep(0);
+
+    const warning =
+      algoStr.length === 0
+        ? 'Imported legacy topology JSON without "algorithm"; defaulted to LINK_STATE.'
+        : ignored > 0
+          ? `Ignored ${ignored} unknown event(s).`
+          : undefined;
+
+    return warning ? { applied: true, warning } : { applied: true };
   }
 }
 

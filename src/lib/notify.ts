@@ -1,20 +1,11 @@
-// src/lib/notify.ts
-export async function notify(message: string) {
-  if (typeof window === 'undefined' || !('Notification' in window)) {
-    console.warn('Notifications not supported in this environment');
+export async function notify(message: string): Promise<void> {
+  const text = String(message ?? '');
+
+  if (typeof window === 'undefined') {
+    console.log(`[notify] ${text}`);
     return;
   }
 
-  let permission = Notification.permission;
-
-  if (permission === 'default') {
-    permission = await Notification.requestPermission();
-  }
-
-  if (permission === 'granted') {
-    new Notification(message);
-  } else {
-    console.log('Notification:', message);
-  }
+  console.log(`[notify] ${text}`);
 }
 
