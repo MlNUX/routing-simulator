@@ -178,56 +178,83 @@
   }
 </script>
 
-<div class="toolbar">
-  <div class="toolbar-title">ROUTING SIMULATOR</div>
+<div class="fixed top-1.5 left-1/2 -translate-x-1/2 z-50 w-[min(1120px,90vw)]">
+  <div class="w-full px-6 py-3 flex items-center justify-between">
+    
+    <!--top bar left side-->
+    <div class="w-1/3">
+      <div class="text-base font-black text-bg-text tracking-[0.25em]">ROUTING SIMULATOR</div>
+    </div>
 
-  <div class="toolbar-center">
-    <button
-      class={`btn-pill ${
-        selected === 'link' ? 'btn-pill--primary' : 'btn-pill--ghost'
-      }`}
-      on:click={selectLinkState}
-    >
-      LINK STATE
-    </button>
+    <!--top bar center-->
+    <div class="w-1/3 flex items-center justify-center gap-3 whitespace-nowrap">
+      <button
+        class={`btn-pill ${
+          selected === 'link' ? 'btn-pill--primary' : 'btn-pill--ghost'
+        }`}
+        on:click={selectLinkState}
+      >
+        LINK STATE
+      </button>
 
-    <button
-      class={`btn-pill ${
-        selected === 'distance' ? 'btn-pill--primary' : 'btn-pill--ghost'
-      }`}
-      on:click={selectDistanceVector}
-    >
-      DISTANCE VECTOR
-    </button>
+      <button
+        class={`btn-pill ${
+          selected === 'distance' ? 'btn-pill--primary' : 'btn-pill--ghost'
+        }`}
+        on:click={selectDistanceVector}
+      >
+        DISTANCE VECTOR
+      </button>
 
-    <button
-      class={`btn-pill ${
-        selected === 'distancePoisoned' ? 'btn-pill--primary' : 'btn-pill--ghost'
-      }`}
-      on:click={selectDistanceVectorPoisoned}
-    >
-      DISTANCE VECTOR (PR)
-    </button>
+      <button
+        class={`btn-pill ${
+          selected === 'distancePoisoned' ? 'btn-pill--primary' : 'btn-pill--ghost'
+        }`}
+        on:click={selectDistanceVectorPoisoned}
+      >
+        DISTANCE VECTOR (PR)
+      </button>
 
-    <button
-      class="btn-pill btn-pill--primary"
-      on:click={handleChoosePreset}
-    >
-      CHOOSE PRESET
-    </button>
-  </div>
+      <button
+        class="btn-pill btn-pill--primary"
+        on:click={handleChoosePreset}
+      >
+        CHOOSE PRESET
+      </button>
+    </div>
 
-  <div class="toolbar-right">
-    <button class="btn-icon" title="Save JSON" on:click={handleSave}>💾</button>
-    <button class="btn-icon" title="Import JSON" on:click={handleImport}>⬆️</button>
+    <!--top bar right side-->
+    <div class="w-1/3 flex items-center justify-end gap-2">
+      <!--Edit button-->
+      <!--TO DO: add on-click functionality-->
+      <button class="w-9 h-9 bg-primary text-white cursor-pointer text-base border-none rounded-xl
+      flex items-center justify-center hover:brightness-110" 
+      >
+        <img src="/icons/edit.svg" alt="Edit">
+      </button>
 
-    <input
-      bind:this={fileInput}
-      type="file"
-      accept="application/json,.json"
-      style="display:none;"
-      on:change={handleFileChosen}
-    />
+      <!--Save button-->
+      <button class="w-9 h-9 bg-primary text-white cursor-pointer text-base border-none rounded-xl
+      flex items-center justify-center hover:brightness-110" 
+      on:click={handleSave}>
+        <img src="/icons/save.svg" alt="Save">
+      </button>
+
+      <!--Import button-->
+      <button class="w-9 h-9 bg-primary text-white cursor-pointer text-base border-none rounded-xl
+      flex items-center justify-center hover:brightness-110" 
+      on:click={handleImport}>
+        <img src="/icons/upload.svg" alt="Import">
+      </button>
+
+      <input
+        bind:this={fileInput}
+        type="file"
+        accept="application/json,.json"
+        style="display:none;"
+        on:change={handleFileChosen}
+      />
+    </div>
   </div>
 </div>
 

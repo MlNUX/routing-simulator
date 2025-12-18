@@ -47,43 +47,6 @@ body {
   height: 100%;
 }
 
-.top-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 10;
-}
-
-.toolbar {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 12px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.toolbar-title {
-  font-size: 14px;
-  font-weight: 900;
-  letter-spacing: 0.25em;
-}
-
-.toolbar-center {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-}
-
-.toolbar-right {
-  width: 140px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
 .btn-pill {
   border-radius: 999px;
   padding: 8px 24px;
