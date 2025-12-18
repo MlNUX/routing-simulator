@@ -35,61 +35,66 @@
   }
 </script>
 
-<div class="controls-row">
-  <!-- stop -->
-  <button
-    class="control-btn"
-    title="Stop (go to start)"
-    on:click={handleStop}
-  >
-    ⏹
-  </button>
+<div class="flex justify-center">
+  <div class="flex rounded-xl bg-primary p-1">
 
-  <!-- step backward -->
-  <button
-    class="control-btn"
-    title="Step back"
-    on:click={stepBackward}
-  >
-    ⏮
-  </button>
+    <!-- stop -->
+    <button
+      class="w-9 h-9 bg-primary text-white cursor-pointer text-base border-none rounded-xl
+      flex items-center justify-center"
+      on:click={handleStop}
+    >
+      <img src="/icons/stop.svg" alt="Stop">
+    </button>
 
-  <!-- play -->
-  <button
-    class="control-btn"
-    title="Play"
-    on:click={handlePlay}
-    disabled={isPlaying}
-  >
-    ▶
-  </button>
+    <!-- one step backward -->
+    <button
+      class="w-9 h-9 bg-primary text-white cursor-pointer text-base border-none rounded-xl
+      flex items-center justify-center"
+      on:click={stepBackward}
+    >
+      <img src="/icons/step-back.svg" alt="Step backward">
+    </button>
 
-  <!-- pause -->
-  <button
-    class="control-btn"
-    title="Pause"
-    on:click={handlePause}
-    disabled={!isPlaying}
-  >
-    ⏸
-  </button>
+    <!-- play -->
+    <button
+      class="w-9 h-9 bg-primary text-white cursor-pointer text-base border-none rounded-xl
+      flex items-center justify-center"
+      on:click={handlePlay}
+      disabled={isPlaying}
+    >
+      <img src="/icons/play.svg" alt="Play">
+    </button>
 
-  <!-- step forward -->
-  <button
-    class="control-btn"
-    title="Step forward"
-    on:click={stepForward}
-  >
-    ⏭
-  </button>
+    <!--TO DO: make this active during playing-->
+    <!-- pause -->
+    <button
+      class="w-9 h-9 bg-primary text-white cursor-pointer text-base border-none rounded-xl
+      flex items-center justify-center"
+      on:click={handlePause}
+      disabled={!isPlaying}
+    >
+      <img src="/icons/pause.svg" alt="Pause">
+    </button>
 
-  <!-- reset -->
-  <button
-    class="control-btn"
-    title="Reset simulation"
-    on:click={handleReset}
-  >
-    ↻
-  </button>
+    <!-- one step forward -->
+    <button
+      class="w-9 h-9 bg-primary text-white cursor-pointer text-base border-none rounded-xl
+      flex items-center justify-center"
+      on:click={stepForward}
+    >
+      <img src="/icons/step-front.svg" alt="Step forward">
+    </button>
+
+    <!-- reset -->
+    <button
+      class="w-9 h-9 bg-primary text-white cursor-pointer text-base border-none rounded-xl
+      flex items-center justify-center"
+      on:click={handleReset}
+    >
+      <img src="/icons/reload.svg" alt="Reset">
+    </button>
+  </div>
 </div>
+
 

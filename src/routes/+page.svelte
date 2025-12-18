@@ -122,7 +122,9 @@
   });
 </script>
 
-<div class="canvas-layout" style={`--uiScale: ${scale};`}>
+<div class="relative w-full h-full" 
+     style={`--uiScale: ${scale};`}
+>
   <div class="editor-shell">
     <Editor />
   </div>
@@ -139,12 +141,15 @@
   <Packets />
 
   <div
-    class="bottom-bar"
-    style="transform: scale(var(--uiScale, 1)); transform-origin: bottom left;"
+    class="absolute left-1/2 bottom-6 z-10 px-4 w-[min(900px,90vw)] justify-center"
+    style="transform: translateX(-50%) scale(var(--uiScale, 1)); transform-origin: bottom center;"
   >
-    <div class="current-state-pill">
+    
+    <div class="inline-block px-8 py-3 rounded-full bg-primary text-white 
+      font-semibold mb-1.5 text-[14px] min-w-[120px] text-center">
       Current state: {currentStep}
     </div>
+    
 
     <Timeline />
     <PlaybackControls />
