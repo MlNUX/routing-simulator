@@ -28,8 +28,17 @@
 >
   <span class="router-node__label">{label}</span>
 
-  <Handle type="target" position={Position.Left} />
-  <Handle type="source" position={Position.Right} />
+
+  <Handle id={`${id}-top`} type="target" position={Position.Top} />
+  <Handle id={`${id}-right`} type="target" position={Position.Right} />
+  <Handle id={`${id}-bottom`} type="target" position={Position.Bottom} />
+  <Handle id={`${id}-left`} type="target" position={Position.Left} />
+  
+  <Handle id={`${id}-top`} type="source" position={Position.Top} />
+  <Handle id={`${id}-right`} type="source" position={Position.Right} />
+  <Handle id={`${id}-bottom`} type="source" position={Position.Bottom} />
+  <Handle id={`${id}-left`} type="source" position={Position.Left} />
+
 </div>
 
 <style>

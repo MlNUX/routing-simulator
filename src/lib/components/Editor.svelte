@@ -1,7 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { get } from 'svelte/store';
-  import { SvelteFlow, Background, type NodeTypes } from '@xyflow/svelte';
+  import { SvelteFlow, Background, type NodeTypes, type IsValidConnection } from '@xyflow/svelte';
 
   import RouterNode from '$lib/components/RouterNode.svelte';
   import { notify } from '$lib/notify';
@@ -433,6 +433,9 @@
       await notify('Import failed (invalid JSON?)');
     }
   }
+
+  const isValidConnection: IsValidConnection = (connection) =>
+    mode === 'link';
 </script>
 
 <div
@@ -446,8 +449,8 @@
 >
   {#if browser}
     <SvelteFlow
+      {isValidConnection}
       bind:nodes={flowNodes}
-      bind:edges={flowEdges}
       {nodeTypes}
       {proOptions}
       nodeOrigin={[0.5, 0.5]}
