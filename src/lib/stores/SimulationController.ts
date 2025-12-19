@@ -1,3 +1,6 @@
+// ==============================
+// FILE: ./lib/stores/SimulationController.ts
+// ==============================
 import { Topology } from './Topology';
 import { SimulationState } from './SimulationState';
 import { Router } from './Router';
@@ -346,6 +349,17 @@ export class SimulationController {
   // History building + algorithm per step
   // ---------------------------------------------------------------------------
 
+  /**
+   * Semantics (UI-consistent / Option A):
+   * - Within a step, topology edits DO NOT re-run the routing algorithm.
+   * - The algorithm runs only when you advance to the next step (PLAY).
+   *
+   * Therefore, for step k (k>=1):
+   * 1) start from step k-1 topology (after its edits),
+   * 2) run one algorithm round to produce routing tables for step k,
+   * 3) apply step k edits to the topology WITHOUT changing routing tables,
+   * 4) ensure routing tables have rows for newly added/removed destinations (∞ for new ones).
+   */
   private rebuildHistory(): void {
     const states: SimulationState[] = [];
 
@@ -356,10 +370,7 @@ export class SimulationController {
     this.applyEventsToTopology(step0Topo, step0Events);
     this.initializeRoutingTablesBlank(step0Topo);
 
-    // IMPORTANT:
     // At step 0, we still want the UI to show whether routing tables are consistent with reachability.
-    // - No neighbors => everything unreachable => tables with ∞ are correct => green
-    // - First time wired up (reachable exists) but tables still ∞ until PLAY => mismatch => red
     this.markOptimalityAgainstDijkstra(step0Topo);
 
     states.push(new SimulationState(0, step0Topo, step0Events));
@@ -368,12 +379,18 @@ export class SimulationController {
       const prevState = states[step - 1];
       const prevTopo = prevState.topologyState;
 
+      // 1) carry topology forward from previous step
       const topo = cloneTopology(prevTopo);
 
+      // 2) run exactly one algorithm round to produce the routing tables for this step
+      this.runAlgorithmOneRound(step, topo, prevTopo);
+
+      // 3) apply edits of THIS step without re-running algorithm
       const events = this.getRawEventsForStep(step);
       this.applyEventsToTopology(topo, events);
 
-      this.runAlgorithmOneRound(step, topo, prevTopo);
+      // 4) Option A: keep tables as-is, but adjust the "shape" (new rows => ∞, removed nodes => removed rows)
+      this.normalizeRoutingTablesForCurrentNodeSet(topo);
 
       this.markOptimalityAgainstDijkstra(topo);
 
@@ -490,6 +507,51 @@ export class SimulationController {
           r.routingTable.entries.set(destId, new RoutingEntry(destId, String(r.id), 0));
         } else {
           r.routingTable.entries.set(destId, new RoutingEntry(destId, '', Number.POSITIVE_INFINITY));
+        }
+      }
+    }
+  }
+
+  /**
+   * Option A: after topology edits inside a step, do NOT recompute routes.
+   * Only keep the table "shape" consistent with the current node set.
+   */
+  private normalizeRoutingTablesForCurrentNodeSet(topo: Topology): void {
+    const destIds = this.getAllRouterIds(topo);
+    const keep = new Set<string>(destIds);
+
+    for (const n of topo.nodes.values()) {
+      if (!(n instanceof Router)) continue;
+
+      const r = n as Router;
+      const selfId = String(r.id);
+
+      // Remove rows for deleted nodes
+      for (const k of Array.from(r.routingTable.entries.keys())) {
+        if (!keep.has(String(k))) {
+          r.routingTable.entries.delete(k);
+        }
+      }
+
+      // Add rows for new nodes (∞), keep existing costs/hops untouched
+      for (const destId of destIds) {
+        if (destId === selfId) {
+          const e = r.routingTable.entries.get(destId);
+          if (!e) {
+            r.routingTable.entries.set(destId, new RoutingEntry(destId, selfId, 0));
+          } else {
+            e.destinationId = destId;
+            e.nextHopId = selfId;
+            e.cost = 0;
+          }
+          continue;
+        }
+
+        const e = r.routingTable.entries.get(destId);
+        if (!e) {
+          r.routingTable.entries.set(destId, new RoutingEntry(destId, '', Number.POSITIVE_INFINITY));
+        } else {
+          e.destinationId = destId;
         }
       }
     }
