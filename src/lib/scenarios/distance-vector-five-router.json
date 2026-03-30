@@ -1,0 +1,236 @@
+{
+	"algorithm": "DISTANCE_VECTOR",
+	"history": [
+		{
+			"step": 0,
+			"topology": {
+				"nodes": [
+					{
+						"id": "R1",
+						"type": "ROUTER",
+						"name": "A",
+						"xPos": 120,
+						"yPos": 120,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "R1",
+									"nextHopId": "R1",
+									"cost": 0
+								},
+								{
+									"destinationId": "R2",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R3",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R4",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R5",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								}
+							]
+						}
+					},
+					{
+						"id": "R2",
+						"type": "ROUTER",
+						"name": "B",
+						"xPos": 360,
+						"yPos": 120,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "R1",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R2",
+									"nextHopId": "R2",
+									"cost": 0
+								},
+								{
+									"destinationId": "R3",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R4",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R5",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								}
+							]
+						}
+					},
+					{
+						"id": "R3",
+						"type": "ROUTER",
+						"name": "C",
+						"xPos": 200,
+						"yPos": 260,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "R1",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R2",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R3",
+									"nextHopId": "R3",
+									"cost": 0
+								},
+								{
+									"destinationId": "R4",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R5",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								}
+							]
+						}
+					},
+					{
+						"id": "R4",
+						"type": "ROUTER",
+						"name": "D",
+						"xPos": 300,
+						"yPos": 340,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "R1",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R2",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R3",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R4",
+									"nextHopId": "R4",
+									"cost": 0
+								},
+								{
+									"destinationId": "R5",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								}
+							]
+						}
+					},
+					{
+						"id": "R5",
+						"type": "ROUTER",
+						"name": "E",
+						"xPos": 420,
+						"yPos": 340,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "R1",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R2",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R3",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R4",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R5",
+									"nextHopId": "R5",
+									"cost": 0
+								}
+							]
+						}
+					}
+				],
+				"links": [
+					{
+						"id": "L1",
+						"sourceId": "R1",
+						"targetId": "R3",
+						"weight": 1
+					},
+					{
+						"id": "L2",
+						"sourceId": "R1",
+						"targetId": "R2",
+						"weight": 4
+					},
+					{
+						"id": "L3",
+						"sourceId": "R3",
+						"targetId": "R4",
+						"weight": 5
+					},
+					{
+						"id": "L4",
+						"sourceId": "R4",
+						"targetId": "R2",
+						"weight": 2
+					},
+					{
+						"id": "L5",
+						"sourceId": "R2",
+						"targetId": "R5",
+						"weight": 4
+					},
+					{
+						"id": "L6",
+						"sourceId": "R4",
+						"targetId": "R5",
+						"weight": 1
+					}
+				]
+			},
+			"events": []
+		}
+	]
+}

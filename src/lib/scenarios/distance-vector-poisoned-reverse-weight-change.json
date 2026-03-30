@@ -1,0 +1,343 @@
+{
+	"algorithm": "DISTANCE_VECTOR_POISONED",
+	"history": [
+		{
+			"step": 0,
+			"topology": {
+				"nodes": [
+					{
+						"id": "R1",
+						"type": "ROUTER",
+						"name": "A",
+						"xPos": 120,
+						"yPos": 120,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "R1",
+									"nextHopId": "R1",
+									"cost": 0
+								},
+								{
+									"destinationId": "R2",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R3",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								}
+							]
+						}
+					},
+					{
+						"id": "R2",
+						"type": "ROUTER",
+						"name": "B",
+						"xPos": 360,
+						"yPos": 120,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "R1",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R2",
+									"nextHopId": "R2",
+									"cost": 0
+								},
+								{
+									"destinationId": "R3",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								}
+							]
+						}
+					},
+					{
+						"id": "R3",
+						"type": "ROUTER",
+						"name": "C",
+						"xPos": 240,
+						"yPos": 320,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "R1",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R2",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "R3",
+									"nextHopId": "R3",
+									"cost": 0
+								}
+							]
+						}
+					}
+				],
+				"links": [
+					{
+						"id": "L1",
+						"sourceId": "R1",
+						"targetId": "R2",
+						"weight": 60
+					},
+					{
+						"id": "L2",
+						"sourceId": "R1",
+						"targetId": "R3",
+						"weight": 8
+					},
+					{
+						"id": "L3",
+						"sourceId": "R2",
+						"targetId": "R3",
+						"weight": 2
+					}
+				]
+			},
+			"events": []
+		},
+		{
+			"step": 1,
+			"stepType": "recompute",
+			"topology": {
+				"nodes": [
+					{
+						"id": "R1",
+						"type": "ROUTER",
+						"name": "A",
+						"xPos": 120,
+						"yPos": 120,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "R1",
+									"nextHopId": "R1",
+									"cost": 0
+								},
+								{
+									"destinationId": "R2",
+									"nextHopId": "R3",
+									"cost": 10
+								},
+								{
+									"destinationId": "R3",
+									"nextHopId": "R3",
+									"cost": 8
+								}
+							]
+						}
+					},
+					{
+						"id": "R2",
+						"type": "ROUTER",
+						"name": "B",
+						"xPos": 360,
+						"yPos": 120,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "R1",
+									"nextHopId": "R3",
+									"cost": 10
+								},
+								{
+									"destinationId": "R2",
+									"nextHopId": "R2",
+									"cost": 0
+								},
+								{
+									"destinationId": "R3",
+									"nextHopId": "R3",
+									"cost": 2
+								}
+							]
+						}
+					},
+					{
+						"id": "R3",
+						"type": "ROUTER",
+						"name": "C",
+						"xPos": 240,
+						"yPos": 320,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "R1",
+									"nextHopId": "R1",
+									"cost": 8
+								},
+								{
+									"destinationId": "R2",
+									"nextHopId": "R2",
+									"cost": 2
+								},
+								{
+									"destinationId": "R3",
+									"nextHopId": "R3",
+									"cost": 0
+								}
+							]
+						}
+					}
+				],
+				"links": [
+					{
+						"id": "L1",
+						"sourceId": "R1",
+						"targetId": "R2",
+						"weight": 60
+					},
+					{
+						"id": "L2",
+						"sourceId": "R1",
+						"targetId": "R3",
+						"weight": 8
+					},
+					{
+						"id": "L3",
+						"sourceId": "R2",
+						"targetId": "R3",
+						"weight": 2
+					}
+				]
+			},
+			"events": []
+		},
+		{
+			"step": 2,
+			"stepType": "update",
+			"topology": {
+				"nodes": [
+					{
+						"id": "R1",
+						"type": "ROUTER",
+						"name": "A",
+						"xPos": 120,
+						"yPos": 120,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "R1",
+									"nextHopId": "R1",
+									"cost": 0
+								},
+								{
+									"destinationId": "R2",
+									"nextHopId": "R3",
+									"cost": 10
+								},
+								{
+									"destinationId": "R3",
+									"nextHopId": "R3",
+									"cost": 8
+								}
+							]
+						}
+					},
+					{
+						"id": "R2",
+						"type": "ROUTER",
+						"name": "B",
+						"xPos": 360,
+						"yPos": 120,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "R1",
+									"nextHopId": "R3",
+									"cost": 10
+								},
+								{
+									"destinationId": "R2",
+									"nextHopId": "R2",
+									"cost": 0
+								},
+								{
+									"destinationId": "R3",
+									"nextHopId": "R3",
+									"cost": 2
+								}
+							]
+						}
+					},
+					{
+						"id": "R3",
+						"type": "ROUTER",
+						"name": "C",
+						"xPos": 240,
+						"yPos": 320,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "R1",
+									"nextHopId": "R1",
+									"cost": 8
+								},
+								{
+									"destinationId": "R2",
+									"nextHopId": "R2",
+									"cost": 2
+								},
+								{
+									"destinationId": "R3",
+									"nextHopId": "R3",
+									"cost": 0
+								}
+							]
+						}
+					}
+				],
+				"links": [
+					{
+						"id": "L1",
+						"sourceId": "R1",
+						"targetId": "R2",
+						"weight": 60
+					},
+					{
+						"id": "L2",
+						"sourceId": "R1",
+						"targetId": "R3",
+						"weight": 80
+					},
+					{
+						"id": "L3",
+						"sourceId": "R2",
+						"targetId": "R3",
+						"weight": 2
+					}
+				]
+			},
+			"events": [
+				{
+					"step": 2,
+					"type": "WEIGHT_CHANGE",
+					"targetId": "L2",
+					"payload": {
+						"weight": 80
+					}
+				}
+			]
+		}
+	]
+}

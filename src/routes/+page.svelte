@@ -1,157 +1,107 @@
+<!-- routes/+page.svelte -->
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { get } from 'svelte/store';
+	import { fly } from 'svelte/transition';
+	import { Controls } from '@xyflow/svelte';
 
-  import Toolbar from '$lib/components/Toolbar.svelte';
-  import Editor from '$lib/components/Editor.svelte';
-  import RouterPanel from '$lib/components/RouterPanel.svelte';
-  import Timeline from '$lib/components/Timeline.svelte';
-  import PlaybackControls from '$lib/components/PlaybackControls.svelte';
-  import RouterTablePanel from '$lib/components/RouterTablePanel.svelte';
-  import Packets from '$lib/components/Packets.svelte';
-  import RouterHistoryModal from '$lib/components/RouterHistoryModal.svelte';
+	import Toolbar from '$lib/components/Toolbar.svelte';
+	import Editor from '$lib/components/Editor.svelte';
+	import RouterPanel from '$lib/components/RouterPanel.svelte';
+	import Timeline from '$lib/components/Timeline.svelte';
+	import PlaybackControls from '$lib/components/PlaybackControls.svelte';
+	import RouterTablePanel from '$lib/components/RouterTablePanel.svelte';
+	import ErrorToast from '$lib/components/ErrorToast.svelte';
+	import ConfirmMenu from '$lib/components/ConfirmMenu.svelte';
+	import SurferWindow from '$lib/components/SurferWindow.svelte';
 
-  import {
-    simulation,
-    uiScale,
-    play,
-    pause,
-    stepForward,
-    stepBackward,
-    toggleDeletePlacement,
-    toggleRouterPlacement,
-    toggleLinkPlacement,
-    clearPlacementMode,
-    deleteSelection,
-    undo,
-    redo
-  } from '$lib/stores/simulation';
+	import { simulation, selectedRouterId, uiState, hideErrorToast } from '$lib/viewmodels';
+	import ToggleTheme from '$lib/components/ToggleTheme.svelte';
+	import ShortcutMenu from '$lib/components/ShortcutMenu.svelte';
+	import { RoutingAlgorithmType } from '$lib/model/RoutingAlgorithmType';
 
-  $: controller = $simulation as any;
-  $: currentStep = controller.currentStepIndex ?? 0;
-  $: scale = $uiScale;
+	const scale = 1;
+	const currentStep = 0;
 
-  function isTypingTarget(el: EventTarget | null): boolean {
-    const t = el as HTMLElement | null;
-    if (!t) return false;
-    const tag = (t.tagName ?? '').toLowerCase();
-    return tag === 'input' || tag === 'textarea' || (t as any).isContentEditable === true;
-  }
-
-  onMount(() => {
-    const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
-
-    const handler = (e: KeyboardEvent) => {
-      if (isTypingTarget(e.target)) {
-        return;
-      }
-
-      // Undo/Redo
-      const mod = isMac ? e.metaKey : e.ctrlKey;
-      if (mod && (e.key === 'z' || e.key === 'Z')) {
-        e.preventDefault();
-        if (e.shiftKey) {
-          redo();
-        } else {
-          undo();
-        }
-        return;
-      }
-
-      if (mod && (e.key === 'y' || e.key === 'Y')) {
-        e.preventDefault();
-        redo();
-        return;
-      }
-
-      if (e.key === 'Escape') {
-        clearPlacementMode();
-        return;
-      }
-
-      // Space: play/pause
-      if (e.key === ' ') {
-        e.preventDefault();
-        const ctrl = get(simulation);
-        if (ctrl.running) {
-          pause();
-        } else {
-          play();
-        }
-        return;
-      }
-
-      // Step
-      if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        stepForward();
-        return;
-      }
-
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        stepBackward();
-        return;
-      }
-
-      // Tool toggles
-      if (e.key === 'r' || e.key === 'R') {
-        toggleRouterPlacement();
-        return;
-      }
-
-      if (e.key === 'l' || e.key === 'L') {
-        toggleLinkPlacement();
-        return;
-      }
-
-      if (e.key === 'd' || e.key === 'D') {
-        toggleDeletePlacement();
-        return;
-      }
-
-      // Delete selection
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        e.preventDefault();
-        deleteSelection();
-        return;
-      }
-    };
-
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  });
+	$: toastOpen = !!$uiState?.errorToast?.open;
+	$: toastMessage = String($uiState?.errorToast?.message ?? '');
+	$: algo = String($simulation?.algorithm ?? RoutingAlgorithmType.LINK_STATE);
+	$: isDV =
+		algo === RoutingAlgorithmType.DISTANCE_VECTOR ||
+		algo === RoutingAlgorithmType.DISTANCE_VECTOR_POISONED;
+	$: compactHistoryOpen = !!$uiState?.historyCompactOpen;
+	$: historyViewOpen = !!$uiState?.showHistoryModal || !!$uiState?.showDijkstraModal;
+	$: networkOffsetPx = compactHistoryOpen ? 'min(34vw, 420px)' : '0px';
+	$: stepIndex = Number($simulation?.currentStepIndex ?? 0);
+	$: history = Array.isArray(($simulation as any)?.history)
+		? (($simulation as any).history as any[])
+		: [];
+	$: stateAtStep = history?.[Math.max(0, Math.floor(stepIndex))] ?? null;
+	$: stepType = String((stateAtStep as any)?.stepType ?? '');
+	$: stepLabel = (() => {
+		const s = Math.floor(Number.isFinite(stepIndex) ? stepIndex : 0);
+		if (!isDV) return `#${s}`;
+		if (s === 0) return '0';
+		const iter = Math.floor((s + 1) / 2);
+		const phase = s % 2 === 1 ? '1' : '2';
+		return `${iter}.${phase}`;
+	})();
+	$: stepPhase = (() => {
+		const s = Math.floor(Number.isFinite(stepIndex) ? stepIndex : 0);
+		if (stepType === 'update') return 'Update';
+		if (!isDV) return '';
+		if (stepType === 'send') return 'Send';
+		if (stepType === 'recompute') return 'Recompute';
+		if (s === 0) return 'Initialize';
+		return s % 2 === 1 ? 'Send' : 'Recompute';
+	})();
 </script>
 
-<div class="relative w-full h-full" 
-     style={`--uiScale: ${scale};`}
->
-  <div class="editor-shell">
-    <Editor />
-  </div>
+<div class:help-mode={$uiState.helpMode} class="relative h-full w-full" style={`--uiScale: ${scale};`}>
+	<div
+		class="absolute inset-y-0 right-0 z-0 transition-[left,width] duration-200 ease-out"
+		style={`left: ${networkOffsetPx}; width: calc(100% - ${networkOffsetPx});`}
+	>
+		<Editor />
+	</div>
 
-  <div class="top-bar" style="transform: scale(var(--uiScale, 1)); transform-origin: top left;">
-    <Toolbar />
-  </div>
+	<ErrorToast open={toastOpen} message={toastMessage} timeout={4000} onClose={hideErrorToast} />
+	<ConfirmMenu />
+	<SurferWindow />
 
-  <RouterPanel />
-  <RouterTablePanel />
-  <Packets />
-  <RouterHistoryModal />
+	<ShortcutMenu />
+	<div class="top-bar" style="transform: scale(var(--uiScale, 1)); transform-origin: top left;">
+		<Toolbar />
+		<ToggleTheme />
+	</div>
 
-  <div
-    class="absolute left-1/2 bottom-6 z-10 px-4 w-[min(900px,90vw)] justify-center"
-    style="transform: translateX(-50%) scale(var(--uiScale, 1)); transform-origin: bottom center;"
-  >
-    
-    <div class="inline-block px-8 py-3 rounded-full bg-primary text-white 
-      font-semibold mb-1.5 text-[14px] min-w-[120px] text-center">
-      Current state: {currentStep}
-    </div>
-    
+	{#if $uiState.menuOpen}
+		<div in:fly={{ x: -18, duration: 180 }} out:fly={{ x: -18, duration: 160 }}>
+			<RouterPanel />
+		</div>
+	{/if}
 
-    <Timeline />
-    <PlaybackControls />
-  </div>
+	{#if $selectedRouterId && !historyViewOpen}
+		<RouterTablePanel />
+	{/if}
+
+	<div
+		class="absolute bottom-6 left-1/2 z-10 w-[min(900px,90vw)] justify-center px-4"
+		style="transform: translateX(-50%) scale(var(--uiScale, 1)); transform-origin: bottom center;"
+	>
+		<div
+			class="mb-1.5 inline-block min-w-[120px] rounded-full bg-primary px-2
+      py-1 text-center text-[14px] font-semibold text-white"
+		>
+			Current state: {stepLabel}{stepPhase ? ` · ${stepPhase}` : ''}
+		</div>
+
+		<Timeline />
+		<PlaybackControls />
+	</div>
+
+	<div class="absolute right-18 bottom-0.5">
+		<Controls
+			class="items-center justify-center rounded-lg 
+    p-1 text-accent shadow-lg hover:bg-light-hover-white dark:hover:bg-blue-950"
+		/>
+	</div>
 </div>
-

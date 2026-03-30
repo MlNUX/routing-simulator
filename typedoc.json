@@ -1,0 +1,24 @@
+{
+	"entryPoints": [
+		"src/lib/model/EndDevice.ts",
+		"src/lib/model/RoutingPacket.ts",
+		"src/lib/model/SimulationState.ts",
+		"src/lib/model/MinHeap.ts",
+		"src/lib/model/RoutingTable.ts",
+		"src/lib/model/Topology.ts",
+		"src/lib/model/Router.ts",
+		"src/lib/model/Link.ts",
+		"src/lib/model/RoutingAlgorithmType.ts",
+		"src/lib/model/DistanceVectorAlgorithm.ts",
+		"src/lib/model/LinkStateAlgorithm.ts",
+		"src/lib/model/SimulationController.ts",
+		"src/lib/model/Json.ts",
+		"src/lib/viewmodels/index.ts"
+	],
+	"out": "docs/api-ts",
+	"plugin": ["typedoc-plugin-markdown"],
+	"entryFileName": "index",
+	"skipErrorChecking": true,
+	"readme": "none",
+	"githubPages": false
+}

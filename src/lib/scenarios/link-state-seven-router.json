@@ -1,0 +1,462 @@
+{
+	"algorithm": "LINK_STATE",
+	"history": [
+		{
+			"step": 0,
+			"topology": {
+				"nodes": [
+					{
+						"id": "A",
+						"type": "ROUTER",
+						"name": "A",
+						"xPos": 80,
+						"yPos": 220,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "A",
+									"nextHopId": "A",
+									"cost": 0
+								},
+								{
+									"destinationId": "B",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "C",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "D",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "E",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "F",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "G",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								}
+							]
+						}
+					},
+					{
+						"id": "B",
+						"type": "ROUTER",
+						"name": "B",
+						"xPos": 260,
+						"yPos": 60,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "A",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "B",
+									"nextHopId": "B",
+									"cost": 0
+								},
+								{
+									"destinationId": "C",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "D",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "E",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "F",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "G",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								}
+							]
+						}
+					},
+					{
+						"id": "C",
+						"type": "ROUTER",
+						"name": "C",
+						"xPos": 420,
+						"yPos": 200,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "A",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "B",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "C",
+									"nextHopId": "C",
+									"cost": 0
+								},
+								{
+									"destinationId": "D",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "E",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "F",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "G",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								}
+							]
+						}
+					},
+					{
+						"id": "D",
+						"type": "ROUTER",
+						"name": "D",
+						"xPos": 260,
+						"yPos": 360,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "A",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "B",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "C",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "D",
+									"nextHopId": "D",
+									"cost": 0
+								},
+								{
+									"destinationId": "E",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "F",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "G",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								}
+							]
+						}
+					},
+					{
+						"id": "E",
+						"type": "ROUTER",
+						"name": "E",
+						"xPos": 520,
+						"yPos": 60,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "A",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "B",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "C",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "D",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "E",
+									"nextHopId": "E",
+									"cost": 0
+								},
+								{
+									"destinationId": "F",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "G",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								}
+							]
+						}
+					},
+					{
+						"id": "F",
+						"type": "ROUTER",
+						"name": "F",
+						"xPos": 520,
+						"yPos": 360,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "A",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "B",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "C",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "D",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "E",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "F",
+									"nextHopId": "F",
+									"cost": 0
+								},
+								{
+									"destinationId": "G",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								}
+							]
+						}
+					},
+					{
+						"id": "G",
+						"type": "ROUTER",
+						"name": "G",
+						"xPos": 700,
+						"yPos": 200,
+						"disabled": false,
+						"routingTable": {
+							"entries": [
+								{
+									"destinationId": "A",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "B",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "C",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "D",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "E",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "F",
+									"nextHopId": "-",
+									"cost": "Infinity"
+								},
+								{
+									"destinationId": "G",
+									"nextHopId": "G",
+									"cost": 0
+								}
+							]
+						}
+					}
+				],
+				"links": [
+					{
+						"id": "L1",
+						"sourceId": "A",
+						"targetId": "B",
+						"weight": 11
+					},
+					{
+						"id": "L2",
+						"sourceId": "A",
+						"targetId": "D",
+						"weight": 1
+					},
+					{
+						"id": "L3",
+						"sourceId": "B",
+						"targetId": "C",
+						"weight": 5
+					},
+					{
+						"id": "L4",
+						"sourceId": "B",
+						"targetId": "E",
+						"weight": 2
+					},
+					{
+						"id": "L5",
+						"sourceId": "C",
+						"targetId": "F",
+						"weight": 1
+					},
+					{
+						"id": "L6",
+						"sourceId": "D",
+						"targetId": "F",
+						"weight": 2
+					},
+					{
+						"id": "L7",
+						"sourceId": "C",
+						"targetId": "G",
+						"weight": 2
+					},
+					{
+						"id": "L8",
+						"sourceId": "E",
+						"targetId": "G",
+						"weight": 10
+					},
+					{
+						"id": "L9",
+						"sourceId": "F",
+						"targetId": "G",
+						"weight": 3
+					}
+				]
+			},
+			"events": [
+				{
+					"step": 0,
+					"type": "NODE_MOVE",
+					"targetId": "A",
+					"payload": {
+						"x": 80,
+						"y": 220
+					}
+				},
+				{
+					"step": 0,
+					"type": "NODE_MOVE",
+					"targetId": "B",
+					"payload": {
+						"x": 260,
+						"y": 60
+					}
+				},
+				{
+					"step": 0,
+					"type": "NODE_MOVE",
+					"targetId": "C",
+					"payload": {
+						"x": 420,
+						"y": 200
+					}
+				},
+				{
+					"step": 0,
+					"type": "NODE_MOVE",
+					"targetId": "D",
+					"payload": {
+						"x": 260,
+						"y": 360
+					}
+				},
+				{
+					"step": 0,
+					"type": "NODE_MOVE",
+					"targetId": "E",
+					"payload": {
+						"x": 520,
+						"y": 60
+					}
+				},
+				{
+					"step": 0,
+					"type": "NODE_MOVE",
+					"targetId": "F",
+					"payload": {
+						"x": 520,
+						"y": 360
+					}
+				},
+				{
+					"step": 0,
+					"type": "NODE_MOVE",
+					"targetId": "G",
+					"payload": {
+						"x": 700,
+						"y": 200
+					}
+				}
+			]
+		}
+	]
+}

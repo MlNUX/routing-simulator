@@ -1,13 +1,12 @@
 <script>
-  import '../app.css';
-  import '@xyflow/svelte/dist/style.css';
+	import '../app.css';
+	import '@xyflow/svelte/dist/style.css';
 
-  import { SvelteFlowProvider } from '@xyflow/svelte';
+	import { SvelteFlowProvider } from '@xyflow/svelte';
 </script>
 
 <SvelteFlowProvider>
-  <div class="app-root">
-    <slot />
-  </div>
+	<div class="relative h-screen w-screen overflow-hidden bg-sky-100 dark:bg-dark-theme-blue">
+		<slot />
+	</div>
 </SvelteFlowProvider>
-

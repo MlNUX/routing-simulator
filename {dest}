@@ -1,0 +1,13 @@
+src/lib/components/RouterHistoryModal.svelte:753:																	<th>{rowId}</th>
+src/lib/components/RouterHistoryModal.svelte:757:																	<th>{dest}</th>
+src/lib/components/RouterHistoryModal.svelte:766:																	<td class="td-row-head">{dest}</td>
+src/lib/components/RouterHistoryModal.svelte:794:																	<td class="td-row-head">{rowId}</td>
+src/lib/components/RouterHistoryModal.svelte:917:																		<th>{rowId}</th>
+src/lib/components/RouterHistoryModal.svelte:921:																		<th>{dest}</th>
+src/lib/components/RouterHistoryModal.svelte:930:																		<td class="td-row-head">{dest}</td>
+src/lib/components/RouterHistoryModal.svelte:958:																		<td class="td-row-head">{rowId}</td>
+src/lib/components/RouterHistoryModal.svelte:1011:																		<th>{rowId}</th>
+src/lib/components/RouterHistoryModal.svelte:1015:																		<th>{dest}</th>
+src/lib/components/RouterHistoryModal.svelte:1024:																		<td class="td-row-head">{dest}</td>
+src/lib/components/RouterHistoryModal.svelte:1052:																		<td class="td-row-head">{rowId}</td>
+src/lib/components/RouterHistoryModal.svelte:1396:	.td-row-head {
