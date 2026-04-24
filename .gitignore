@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# SvelteKit build output
+.svelte-kit/
+build/
+
+# Vite / VitePress
+dist/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Coverage
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code
+.claude/
