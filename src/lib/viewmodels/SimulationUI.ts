@@ -841,6 +841,7 @@ export class SimulationUI {
 		this.clearPacketPreview();
 		this.setSelectedRouter(null);
 		this.setLinkDraftSourceId(null);
+		this.uiState.update((s) => ({ ...s, fitViewRequested: true }));
 	}
 
 	/**

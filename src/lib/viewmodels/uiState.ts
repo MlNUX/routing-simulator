@@ -75,6 +75,9 @@ export type UIState = {
 	// Easter Egg
 	showSurfer: boolean;
 
+	// Viewport
+	fitViewRequested: boolean;
+
 	// Temporaerer Hinweis-Toast
 	errorToast: {
 		open: boolean;
@@ -136,6 +139,8 @@ export function createInitialUIState(): UIState {
 		},
 
 		showSurfer: false,
+
+		fitViewRequested: false,
 
 		errorToast: {
 			open: false,

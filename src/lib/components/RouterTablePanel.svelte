@@ -162,10 +162,10 @@
 </script>
 
 <div
-	class="router-panel absolute top-20 right-6 bottom-[120px] z-10 box-border w-[340px]
-  max-w-[340px] min-w-[340px] overflow-auto rounded-xl bg-[rgba(223,243,255,0.96)] p-2.5
-  px-3 text-[11px] text-dark-blue shadow-[0_8px_16px_rgba(15,23,42,0.15)] dark:bg-dark-theme-blue/90
-  dark:text-almost-white dark:shadow-sky-700/20"
+	class="router-panel absolute top-[100px] right-2 bottom-[150px] z-10 box-border w-[calc(100vw-16px)]
+  max-w-[340px] min-w-[200px] overflow-auto rounded-xl bg-[rgba(223,243,255,0.96)] p-2.5
+  px-3 text-[11px] text-dark-blue shadow-[0_8px_16px_rgba(15,23,42,0.15)] sm:top-20 sm:right-6 sm:bottom-[120px] sm:w-[340px]
+  dark:bg-dark-theme-blue/90 dark:text-almost-white dark:shadow-sky-700/20"
 	transition:fly={{ x: 26, duration: 170 }}
 >
 	<div class="flex items-center justify-between gap-2">

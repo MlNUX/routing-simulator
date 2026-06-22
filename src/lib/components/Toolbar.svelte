@@ -282,19 +282,19 @@
 </script>
 
 <div class="fixed top-1.5 left-1/2 z-50 w-[min(1300px,98vw)] -translate-x-1/2">
-	<div class="flex w-full items-center justify-between gap-8 px-3 py-3">
+	<div class="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 sm:flex-nowrap sm:justify-between sm:gap-8 sm:py-3">
 		<!--Top bar left side-->
 		<div
-			class="max-w-[320px] shrink-0"
+			class="order-1 shrink-0"
 			on:dblclick={() => ui.setDebugUnlocked(true)}
 		>
-			<div class="flex items-center gap-3">
+			<div class="flex items-center gap-2 sm:gap-3">
 				<div
-					class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-white/85 p-1 shadow-sm dark:bg-slate-900/80"
+					class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-white/85 p-1 shadow-sm sm:h-11 sm:w-11 dark:bg-slate-900/80"
 				>
 					<img src="/STAR_logo.png" alt="STAR logo" class="h-full w-full object-contain" />
 				</div>
-				<div class="min-w-0">
+				<div class="hidden min-w-0 sm:block">
 					<div class="text-base font-black tracking-[0.25em] text-dark-blue dark:text-almost-white">
 						ROUTING SIMULATOR
 					</div>
@@ -305,8 +305,9 @@
 			</div>
 		</div>
 
-		<div class="flex-1">
-			<div class="flex flex-nowrap items-center justify-center gap-2">
+		<!-- Algo buttons: row 2 on mobile, center on desktop -->
+		<div class="order-3 w-full overflow-x-auto sm:order-2 sm:w-auto sm:flex-1 sm:overflow-visible">
+			<div class="flex flex-nowrap items-center justify-start gap-2 pb-0.5 sm:justify-center sm:pb-0">
 				<button
 					class={`cursor-pointer rounded-full border border-primary px-5 py-2 text-[11px] font-semibold tracking-wider uppercase
           ${
@@ -386,8 +387,8 @@
 			</div>
 		</div>
 
-		<!--Top bar right side-->
-		<div class="flex w-fit shrink-0 items-center justify-end gap-2">
+		<!--Top bar right side: order-2 on mobile (next to logo), order-3 on desktop (right) -->
+		<div class="order-2 ml-auto flex w-fit shrink-0 items-center justify-end gap-2 sm:order-3 sm:ml-0">
 			<button
 				class={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border-none
         text-base text-white hover:brightness-105 ${

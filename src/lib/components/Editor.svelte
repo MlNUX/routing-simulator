@@ -1,7 +1,7 @@
 <!-- lib/components/Editor.svelte -->
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { simulation, ui, uiState, type PlacementMode } from '$lib/viewmodels';
 	import { RoutingAlgorithmType } from '$lib/model/RoutingAlgorithmType';
 	import {
@@ -17,7 +17,7 @@
 
 	const proOptions = { hideAttribution: true };
 
-	const { flowToScreenPosition, getNode, getViewport, screenToFlowPosition } = useSvelteFlow();
+	const { flowToScreenPosition, getNode, getViewport, screenToFlowPosition, setCenter } = useSvelteFlow();
 
 	const nodeTypes: NodeTypes = {
 		router: RouterNode
@@ -596,6 +596,17 @@
 			hoverSourceNodeId,
 			hoverTargetNodeId
 		);
+	}
+
+	$: if ($uiState?.fitViewRequested) {
+		tick().then(() => {
+			if (flowNodes.length > 0) {
+				const cx = flowNodes.reduce((sum, n) => sum + n.position.x, 0) / flowNodes.length;
+				const cy = flowNodes.reduce((sum, n) => sum + n.position.y, 0) / flowNodes.length;
+				setCenter(cx, cy, { zoom: getViewport().zoom });
+			}
+			ui.uiState.update((s) => ({ ...s, fitViewRequested: false }));
+		});
 	}
 
 	$: if (topology || highlightedLinkIdSet) {
