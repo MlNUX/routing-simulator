@@ -85,7 +85,7 @@
 
 	<div
 		class="absolute bottom-4 left-1/2 z-10 w-[min(900px,96vw)] justify-center px-2 sm:bottom-6 sm:px-4"
-		style="transform: translateX(-50%) scale(var(--uiScale, 1)); transform-origin: bottom center;"
+		style="transform: translateX(-50%) scale(var(--uiScale, 1)); transform-origin: bottom center; padding-bottom: env(safe-area-inset-bottom, 0px);"
 	>
 		<div
 			class="mb-1.5 inline-block min-w-[120px] rounded-full bg-primary px-2
@@ -98,7 +98,7 @@
 		<PlaybackControls />
 	</div>
 
-	<div class="absolute right-18 bottom-0.5">
+	<div class="absolute right-18 bottom-0.5 hidden sm:block">
 		<Controls
 			class="items-center justify-center rounded-lg 
     p-1 text-accent shadow-lg hover:bg-light-hover-white dark:hover:bg-blue-950"

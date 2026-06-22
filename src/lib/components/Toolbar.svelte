@@ -22,6 +22,7 @@
 				: ('link' satisfies AlgorithmSelection);
 
 	let fileInput: HTMLInputElement | null = null;
+	let mobileMenuOpen = false;
 
 	type ScenarioEntry = {
 		name: string;
@@ -282,178 +283,223 @@
 </script>
 
 <div class="fixed top-1.5 left-1/2 z-50 w-[min(1300px,98vw)] -translate-x-1/2">
-	<div class="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 sm:flex-nowrap sm:justify-between sm:gap-8 sm:py-3">
-		<!--Top bar left side-->
-		<div
-			class="order-1 shrink-0"
-			on:dblclick={() => ui.setDebugUnlocked(true)}
+
+	<!-- ── MOBILE LAYOUT (< sm) ── -->
+	<div class="flex sm:hidden items-center justify-between px-3 py-2">
+		<!-- Logo -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="flex items-center gap-2" on:dblclick={() => ui.setDebugUnlocked(true)}>
+			<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-white/85 p-1 shadow-sm dark:bg-slate-900/80">
+				<img src="/STAR_logo.png" alt="STAR logo" class="h-full w-full object-contain" />
+			</div>
+			<div>
+				<div class="text-[11px] font-black tracking-[0.2em] text-dark-blue dark:text-almost-white">ROUTING SIM</div>
+				<div class="text-[9px] font-semibold tracking-[0.15em] text-dark-blue/60 uppercase dark:text-almost-white/60">STAR · {selected === 'link' ? 'LS' : selected === 'distance' ? 'DV' : 'DV-PR'}</div>
+			</div>
+		</div>
+
+		<!-- Hamburger -->
+		<button
+			class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border-none bg-primary text-white"
+			on:click={() => (mobileMenuOpen = !mobileMenuOpen)}
+			aria-label="Open menu"
 		>
-			<div class="flex items-center gap-2 sm:gap-3">
-				<div
-					class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-white/85 p-1 shadow-sm sm:h-11 sm:w-11 dark:bg-slate-900/80"
+			{#if mobileMenuOpen}
+				<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M2 2l14 14M16 2L2 16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+			{:else}
+				<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect y="3" width="18" height="2.5" rx="1.25" fill="currentColor"/><rect y="8" width="18" height="2.5" rx="1.25" fill="currentColor"/><rect y="13" width="18" height="2.5" rx="1.25" fill="currentColor"/></svg>
+			{/if}
+		</button>
+	</div>
+
+	<!-- Mobile dropdown -->
+	{#if mobileMenuOpen}
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="fixed inset-0 z-[-1] sm:hidden"
+			on:click={() => (mobileMenuOpen = false)}
+		></div>
+		<div class="absolute left-2 right-2 top-[calc(100%+4px)] z-50 rounded-2xl bg-white/97 p-4 shadow-2xl sm:hidden dark:bg-slate-900/97">
+
+			<!-- Algorithm -->
+			<div class="mb-3">
+				<div class="mb-2 text-[10px] font-bold tracking-[0.15em] text-dark-blue/50 uppercase dark:text-almost-white/50">Algorithm</div>
+				<div class="flex flex-col gap-1.5">
+					<button
+						class={`rounded-xl px-4 py-2.5 text-left text-[12px] font-semibold ${selected === 'link' ? 'bg-primary text-white' : 'bg-sky-50 text-dark-blue dark:bg-slate-800 dark:text-almost-white'}`}
+						on:click={() => { selectLinkState(); mobileMenuOpen = false; }}
+					>Link State</button>
+					<button
+						class={`rounded-xl px-4 py-2.5 text-left text-[12px] font-semibold ${selected === 'distance' ? 'bg-primary text-white' : 'bg-sky-50 text-dark-blue dark:bg-slate-800 dark:text-almost-white'}`}
+						on:click={() => { selectDistanceVector(); mobileMenuOpen = false; }}
+					>Distance Vector</button>
+					<button
+						class={`rounded-xl px-4 py-2.5 text-left text-[12px] font-semibold ${selected === 'distancePoisoned' ? 'bg-primary text-white' : 'bg-sky-50 text-dark-blue dark:bg-slate-800 dark:text-almost-white'}`}
+						on:click={() => { selectDistanceVectorPoisoned(); mobileMenuOpen = false; }}
+					>Distance Vector (PR)</button>
+				</div>
+			</div>
+
+			<div class="my-3 border-t border-slate-200 dark:border-slate-700"></div>
+
+			<!-- Actions -->
+			<div class="flex flex-col gap-1.5">
+				<button
+					class="rounded-xl bg-secondary/20 px-4 py-2.5 text-left text-[12px] font-semibold text-dark-blue dark:text-almost-white"
+					on:click={() => { isLinkState ? ui.setShowDijkstraModal(!$uiState.showDijkstraModal) : ui.setShowHistoryModal(!$uiState.showHistoryModal); mobileMenuOpen = false; }}
+				>Zustände</button>
+				<button
+					class="rounded-xl bg-secondary/20 px-4 py-2.5 text-left text-[12px] font-semibold text-dark-blue dark:text-almost-white"
+					on:click={() => { handleChoosePreset(); mobileMenuOpen = false; }}
+				>Choose Preset</button>
+				{#if $uiState.debugUnlocked}
+					<button
+						class="rounded-xl bg-secondary/20 px-4 py-2.5 text-left text-[12px] font-semibold text-dark-blue dark:text-almost-white"
+						on:click={() => { ui.setShowDebugModal(!$uiState.showDebugModal); mobileMenuOpen = false; }}
+					>Debug Console</button>
+				{/if}
+			</div>
+
+			<div class="my-3 border-t border-slate-200 dark:border-slate-700"></div>
+
+			<!-- Icon actions -->
+			<div class="grid grid-cols-4 gap-2">
+				<button
+					class={`flex flex-col items-center gap-1 rounded-xl py-2.5 text-[10px] font-semibold ${$uiState.helpMode ? 'bg-cyan-500 text-white' : 'bg-sky-50 text-dark-blue dark:bg-slate-800 dark:text-almost-white'}`}
+					on:click={() => { ui.toggleHelpMode(); mobileMenuOpen = false; }}
 				>
+					<img src="/icons/help.svg" alt="" class="h-5 w-5" />Help
+				</button>
+				<button
+					class={`flex flex-col items-center gap-1 rounded-xl py-2.5 text-[10px] font-semibold ${$uiState.menuOpen ? 'bg-primary text-white' : 'bg-sky-50 text-dark-blue dark:bg-slate-800 dark:text-almost-white'}`}
+					on:click={() => { handleToggleMenu(); mobileMenuOpen = false; }}
+				>
+					<img src="/icons/edit.svg" alt="" class="h-5 w-5" />Edit
+				</button>
+				<button
+					class="flex flex-col items-center gap-1 rounded-xl bg-sky-50 py-2.5 text-[10px] font-semibold text-dark-blue disabled:opacity-40 dark:bg-slate-800 dark:text-almost-white"
+					on:click={() => { handleExportJson(); mobileMenuOpen = false; }}
+					disabled={isRunning}
+				>
+					<img src="/icons/save.svg" alt="" class="h-5 w-5" />Save
+				</button>
+				<button
+					class="flex flex-col items-center gap-1 rounded-xl bg-sky-50 py-2.5 text-[10px] font-semibold text-dark-blue disabled:opacity-40 dark:bg-slate-800 dark:text-almost-white"
+					on:click={() => { handleImportJson(); mobileMenuOpen = false; }}
+					disabled={isRunning}
+				>
+					<img src="/icons/upload.svg" alt="" class="h-5 w-5" />Load
+				</button>
+			</div>
+		</div>
+	{/if}
+
+	<!-- ── DESKTOP LAYOUT (sm+) ── -->
+	<div class="hidden sm:flex w-full items-center justify-between gap-8 px-3 py-3">
+		<!--Top bar left side-->
+		<div class="max-w-[320px] shrink-0" on:dblclick={() => ui.setDebugUnlocked(true)}>
+			<div class="flex items-center gap-3">
+				<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-white/85 p-1 shadow-sm dark:bg-slate-900/80">
 					<img src="/STAR_logo.png" alt="STAR logo" class="h-full w-full object-contain" />
 				</div>
-				<div class="hidden min-w-0 sm:block">
-					<div class="text-base font-black tracking-[0.25em] text-dark-blue dark:text-almost-white">
-						ROUTING SIMULATOR
-					</div>
-					<div class="text-[10px] font-semibold tracking-[0.18em] text-dark-blue/70 uppercase dark:text-almost-white/70">
-						STAR
-					</div>
+				<div class="min-w-0">
+					<div class="text-base font-black tracking-[0.25em] text-dark-blue dark:text-almost-white">ROUTING SIMULATOR</div>
+					<div class="text-[10px] font-semibold tracking-[0.18em] text-dark-blue/70 uppercase dark:text-almost-white/70">STAR</div>
 				</div>
 			</div>
 		</div>
 
-		<!-- Algo buttons: row 2 on mobile, center on desktop -->
-		<div class="order-3 w-full overflow-x-auto sm:order-2 sm:w-auto sm:flex-1 sm:overflow-visible">
-			<div class="flex flex-nowrap items-center justify-start gap-2 pb-0.5 sm:justify-center sm:pb-0">
+		<div class="flex-1">
+			<div class="flex flex-nowrap items-center justify-center gap-2">
 				<button
-					class={`cursor-pointer rounded-full border border-primary px-5 py-2 text-[11px] font-semibold tracking-wider uppercase
-          ${
-						selected === 'link'
-							? 'bg-primary text-almost-white'
-							: 'bg-sky-100 text-dark-blue hover:bg-almost-white dark:bg-dark-theme-blue dark:text-almost-white dark:hover:bg-blue-950'
-					}`}
+					class={`cursor-pointer rounded-full border border-primary px-5 py-2 text-[11px] font-semibold tracking-wider uppercase ${selected === 'link' ? 'bg-primary text-almost-white' : 'bg-sky-100 text-dark-blue hover:bg-almost-white dark:bg-dark-theme-blue dark:text-almost-white dark:hover:bg-blue-950'}`}
 					on:click={selectLinkState}
 					data-help="Activate the Link State algorithm."
 					data-help-pos="bottom"
-				>
-					LINK STATE
-				</button>
+				>LINK STATE</button>
 
 				<button
-					class={`cursor-pointer rounded-full border border-primary px-5 py-2 text-[11px] font-semibold tracking-wider uppercase
-          ${
-						selected === 'distance'
-							? 'bg-primary text-white'
-							: 'bg-sky-100 text-dark-blue hover:bg-almost-white dark:bg-dark-theme-blue dark:text-almost-white dark:hover:bg-blue-950'
-					}`}
+					class={`cursor-pointer rounded-full border border-primary px-5 py-2 text-[11px] font-semibold tracking-wider uppercase ${selected === 'distance' ? 'bg-primary text-white' : 'bg-sky-100 text-dark-blue hover:bg-almost-white dark:bg-dark-theme-blue dark:text-almost-white dark:hover:bg-blue-950'}`}
 					on:click={selectDistanceVector}
 					data-help="Activate the Distance Vector algorithm."
 					data-help-pos="bottom"
-				>
-					DISTANCE VECTOR
-				</button>
+				>DISTANCE VECTOR</button>
 
 				<button
-					class={`cursor-pointer rounded-full border border-primary px-5 py-2 text-[11px] font-semibold tracking-wider uppercase
-          ${
-						selected === 'distancePoisoned'
-							? 'bg-primary text-white'
-							: 'bg-sky-100 text-dark-blue hover:bg-almost-white dark:bg-dark-theme-blue dark:text-almost-white dark:hover:bg-blue-950'
-					}`}
+					class={`cursor-pointer rounded-full border border-primary px-5 py-2 text-[11px] font-semibold tracking-wider uppercase ${selected === 'distancePoisoned' ? 'bg-primary text-white' : 'bg-sky-100 text-dark-blue hover:bg-almost-white dark:bg-dark-theme-blue dark:text-almost-white dark:hover:bg-blue-950'}`}
 					on:click={selectDistanceVectorPoisoned}
 					data-help="Activate Distance Vector with Poisoned Reverse."
 					data-help-pos="bottom"
-				>
-					DISTANCE VECTOR (PR)
-				</button>
+				>DISTANCE VECTOR (PR)</button>
 
 				<button
-					class="cursor-pointer rounded-full border border-primary bg-secondary px-5 py-2 text-[11px] font-semibold
-          tracking-wider text-dark-blue uppercase hover:brightness-105"
-					on:click={() =>
-						isLinkState
-							? ui.setShowDijkstraModal(!$uiState.showDijkstraModal)
-							: ui.setShowHistoryModal(!$uiState.showHistoryModal)}
+					class="cursor-pointer rounded-full border border-primary bg-secondary px-5 py-2 text-[11px] font-semibold tracking-wider text-dark-blue uppercase hover:brightness-105"
+					on:click={() => isLinkState ? ui.setShowDijkstraModal(!$uiState.showDijkstraModal) : ui.setShowHistoryModal(!$uiState.showHistoryModal)}
 					data-help="Show routing information."
 					data-help-pos="bottom"
-				>
-					Zustände
-				</button>
+				>Zustände</button>
 
 				{#if $uiState.debugUnlocked}
 					<button
-						class="cursor-pointer rounded-full border border-primary bg-secondary px-5 py-2 text-[11px] font-semibold
-          tracking-wider text-dark-blue uppercase hover:brightness-105"
+						class="cursor-pointer rounded-full border border-primary bg-secondary px-5 py-2 text-[11px] font-semibold tracking-wider text-dark-blue uppercase hover:brightness-105"
 						on:click={() => ui.setShowDebugModal(!$uiState.showDebugModal)}
 						data-help="Open the debug console."
 						data-help-pos="bottom"
-					>
-						DEBUG
-					</button>
+					>DEBUG</button>
 				{/if}
 
 				<button
-					class="cursor-pointer rounded-full border border-primary bg-secondary px-5 py-2 text-[11px] font-semibold
-          tracking-wider text-dark-blue uppercase hover:brightness-105"
+					class="cursor-pointer rounded-full border border-primary bg-secondary px-5 py-2 text-[11px] font-semibold tracking-wider text-dark-blue uppercase hover:brightness-105"
 					on:click={handleChoosePreset}
 					data-help="Load a preset scenario."
 					data-help-pos="bottom"
-				>
-					CHOOSE PRESET
-				</button>
+				>CHOOSE PRESET</button>
 			</div>
 		</div>
 
-		<!--Top bar right side: order-2 on mobile (next to logo), order-3 on desktop (right) -->
-		<div class="order-2 ml-auto flex w-fit shrink-0 items-center justify-end gap-2 sm:order-3 sm:ml-0">
+		<!--Top bar right side-->
+		<div class="flex w-fit shrink-0 items-center justify-end gap-2">
 			<button
-				class={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border-none
-        text-base text-white hover:brightness-105 ${
-					$uiState.helpMode
-						? 'bg-cyan-500 ring-2 ring-white ring-offset-2 ring-offset-primary shadow-lg shadow-cyan-300/60'
-						: 'bg-primary'
-				}`}
+				class={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border-none text-base text-white hover:brightness-105 ${$uiState.helpMode ? 'bg-cyan-500 ring-2 ring-white ring-offset-2 ring-offset-primary shadow-lg shadow-cyan-300/60' : 'bg-primary'}`}
 				on:click={() => ui.toggleHelpMode()}
 				aria-label={$uiState.helpMode ? 'Disable help mode' : 'Enable help mode'}
 				aria-pressed={$uiState.helpMode}
 				title={$uiState.helpMode ? 'Disable help mode' : 'Enable help mode'}
-				data-help={$uiState.helpMode
-					? 'Disable help mode.'
-					: 'Enable help mode and show labels.'}
+				data-help={$uiState.helpMode ? 'Disable help mode.' : 'Enable help mode and show labels.'}
 				data-help-pos="bottom"
-			>
-				<img src="/icons/help.svg" alt="Help" />
-			</button>
+			><img src="/icons/help.svg" alt="Help" /></button>
 
 			<button
-				class={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border-none
-        bg-primary text-base text-white hover:brightness-105 ${$uiState.menuOpen ? 'drop-shadow-md drop-shadow-cyan-400' : ''}`}
+				class={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border-none bg-primary text-base text-white hover:brightness-105 ${$uiState.menuOpen ? 'drop-shadow-md drop-shadow-cyan-400' : ''}`}
 				on:click={handleToggleMenu}
 				aria-label="Toggle tools menu"
 				aria-pressed={$uiState.menuOpen}
 				title={$uiState.menuOpen ? 'Close tools menu' : 'Open tools menu'}
 				data-help={$uiState.menuOpen ? 'Close the editor tools.' : 'Open the editor tools.'}
 				data-help-pos="bottom"
-			>
-				<img src="/icons/edit.svg" alt="Edit" />
-			</button>
+			><img src="/icons/edit.svg" alt="Edit" /></button>
 
 			<button
-				class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border-none
-        bg-primary text-base text-white hover:brightness-105"
+				class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border-none bg-primary text-base text-white hover:brightness-105"
 				on:click={handleExportJson}
 				disabled={isRunning}
 				title="Export JSON"
 				aria-label="Export JSON"
 				data-help="Export the current simulation as JSON."
 				data-help-pos="bottom"
-			>
-				<img src="/icons/save.svg" alt="Save" />
-			</button>
+			><img src="/icons/save.svg" alt="Save" /></button>
 
 			<button
-				class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border-none
-        bg-primary text-base text-white hover:brightness-105"
+				class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border-none bg-primary text-base text-white hover:brightness-105"
 				on:click={handleImportJson}
 				disabled={isRunning}
 				title="Import JSON"
 				aria-label="Import JSON"
 				data-help="Load a simulation from a JSON file."
 				data-help-pos="bottom"
-			>
-				<img src="/icons/upload.svg" alt="Import" />
-			</button>
+			><img src="/icons/upload.svg" alt="Import" /></button>
 
-			<input
-				bind:this={fileInput}
-				type="file"
-				accept="application/json,.json"
-				style="display:none;"
-				on:change={handleFileChosen}
-			/>
+			<input bind:this={fileInput} type="file" accept="application/json,.json" style="display:none;" on:change={handleFileChosen} />
 		</div>
 	</div>
 </div>
