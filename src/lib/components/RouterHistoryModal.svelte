@@ -58,7 +58,6 @@
 	let fullRoutersOpen = false;
 	let fullStepsOpen = false;
 	let compactAxis: 'steps' | 'routers' = 'steps';
-	let fullAxis: 'steps' | 'routers' = 'steps';
 
 	const COMPACT_COL_WIDTH = 320;
 	const COMPACT_MIN_WIDTH = 380;
@@ -636,7 +635,7 @@
 					{/if}
 					<button class="btn btn--close" on:click={close} title="Close">✖</button>
 				{:else}
-					<button class="btn dark:text-dark-blue" on:click={() => fullAxis = fullAxis === 'steps' ? 'routers' : 'steps'}>Swap axes</button>
+					<button class="btn dark:text-dark-blue" on:click={toggleCompactMode}>Compact view</button>
 					{#if isDistanceVector}
 						<button class="btn" class:btn--active={bellmanView} on:click={toggleViewMode}>
 							{bellmanView ? 'Bellman view (PDF)' : 'Standard view'}
@@ -727,10 +726,11 @@
 					{#if selectedRouters.length === 0 || selectedSteps.length === 0}
 						<div class="empty big">Please select at least one router and one time slot.</div>
 					{:else}
-						<div class="tables-scroll dark:bg-[#0F172A]">
-							{#if fullAxis === 'steps'}
+						<div class="tables-scroll dark:bg-[#0F172A]"
+							style={safeViewportWidth < 640 ? 'height: calc(100dvh - 160px); overflow-y: scroll; overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;' : ''}
+						>
 							<!-- Columns = steps, Rows = routers -->
-							<div
+						<div
 								class="matrix-grid"
 								style={`grid-template-columns: 150px repeat(${selectedSteps.length}, minmax(260px, 1fr));`}
 							>
@@ -847,99 +847,6 @@
 									{/each}
 								{/each}
 							</div>
-							{:else}
-							<!-- Columns = routers, Rows = steps -->
-							<div
-								class="matrix-grid"
-								style={`grid-template-columns: 150px repeat(${selectedRouters.length}, minmax(260px, 1fr));`}
-							>
-								<div class="matrix-corner"></div>
-
-								{#each selectedRouters as rid (rid)}
-									{@const routerLabel = routerDisplayNameAny(rid)}
-									<div class="matrix-head sticky-top">
-										<div class="time-title dark:text-almost-white">
-											Router <span class="mono-lg dark:text-almost-white">{routerLabel}</span>
-										</div>
-									</div>
-								{/each}
-
-								{#each selectedSteps as s (s)}
-									{@const phaseLabel = getPhaseLabel(s)}
-									<div class="matrix-step-label sticky-left">
-										{#if bellmanView}
-											<span class="mono-lg">{getBellmanStepHeading(s, allSteps, stepTypeMap, isDistanceVector, isLinkState)}</span>
-										{:else}
-											Step <span class="mono-lg">{s}</span>
-											{#if phaseLabel}<span style="font-size:0.8em; opacity:0.7;">· {phaseLabel}</span>{/if}
-										{/if}
-									</div>
-									{#each selectedRouters as rid (rid)}
-										{@const routerLabel = routerDisplayNameAny(rid)}
-										{@const isUpdate = isUpdateStep(s)}
-										<div class="matrix-cell">
-											{#if bellmanView}
-												{@const dtRes = bellmanTableFor(rid, s)}
-												{@const prevBellman = isUpdate ? bellmanTableFor(rid, s - 1) : null}
-												{#if !dtRes.ok}
-													<div class="empty-cell">Keine Daten</div>
-												{:else}
-													<table class="pdf-table" on:mouseleave={() => setHoverRouting(null, null)}>
-														<thead><tr>
-															<th class="th-corner">D<sup style="margin-left:1px;">{routerLabel}</sup></th>
-															{#each dtRes.table.rowIds as rowId (rowId)}<th>{rowId}</th>{/each}
-														</tr></thead>
-														<tbody>
-															{#each dtRes.table.destIds as dest (dest)}
-																<tr>
-																	<td class="td-row-head">{dest}</td>
-																	{#each dtRes.table.rowIds as rowId (rowId)}
-																		{@const val = dtCell(dtRes.table, rowId, dest)}
-																		{@const min = dtMinimum(dtRes.table, dest)}
-																		{@const isBest = val?.dist !== undefined && val.dist !== Infinity && val.dist === min}
-																		{@const prevVal = previousDtCell(prevBellman, rowId, dest)}
-																		{@const isChanged = isUpdate && dtCellChanged(val, prevVal)}
-																		<td class:cell-best={isBest} class:cell-inf={val?.dist === Infinity} class:cell-changed={isChanged} on:mouseenter={() => setHoverRouting(rowId, dest)}>
-																			{formatDtCell(val)}
-																		</td>
-																	{/each}
-																</tr>
-															{/each}
-														</tbody>
-													</table>
-												{/if}
-											{:else}
-												{@const dvRes = dvTableFor(rid, s)}
-												{#if !dvRes.ok}
-													<div class="empty-cell">Keine Daten</div>
-												{:else}
-													<table class="pdf-table" on:mouseleave={() => setHoverRouting(null, null)}>
-														<thead><tr>
-															<th class="th-corner">Ziel</th>
-															{#each dvRes.table.destIds as dest (dest)}<th>{dest}</th>{/each}
-														</tr></thead>
-														<tbody>
-															{#each dvRes.table.rowIds as rowId (rowId)}
-																<tr>
-																	<td class="td-row-head">{rowId}</td>
-																	{#each dvRes.table.destIds as dest (dest)}
-																		{@const val = dvCell(dvRes.table, rowId, dest)}
-																		{@const isChanged = isUpdate && dvCellChanged(dvRes.table, rowId, dest)}
-																		<td class:cell-changed={isChanged} on:mouseenter={() => setHoverRouting(rowId, dest)}>
-																			{formatDvCell(val)}
-																		</td>
-																	{/each}
-																</tr>
-															{/each}
-														</tbody>
-													</table>
-												{/if}
-											{/if}
-										</div>
-									{/each}
-								{/each}
-							</div>
-							{/if}
 						</div>
 					{/if}
 				</div>
@@ -1645,7 +1552,53 @@
 			font-size: 11px;
 		}
 
-		.modal-body,
+		.modal-body {
+			flex: 1;
+			min-height: 0;
+			overflow: hidden;
+			padding: 8px;
+			display: flex;
+			flex-direction: column;
+		}
+
+		.full-controls {
+			flex-shrink: 0;
+		}
+
+		.tables {
+			flex: 1;
+			min-height: 0;
+			overflow: hidden;
+		}
+
+		.tables-scroll {
+			height: calc(100dvh - 52px - 100px);
+			overflow-x: auto;
+			overflow-y: scroll;
+			-webkit-overflow-scrolling: touch;
+			overscroll-behavior: contain;
+			padding: 8px;
+			padding-bottom: max(16px, env(safe-area-inset-bottom));
+			scrollbar-width: auto;
+			scrollbar-color: #334155 #d6e0ea;
+		}
+
+		.tables-scroll::-webkit-scrollbar {
+			width: 14px;
+			height: 14px;
+		}
+
+		.tables-scroll::-webkit-scrollbar-track {
+			border-radius: 999px;
+			background: #d6e0ea;
+		}
+
+		.tables-scroll::-webkit-scrollbar-thumb {
+			border-radius: 999px;
+			border: 2px solid #d6e0ea;
+			background: #334155;
+		}
+
 		.compact-body {
 			height: calc(100dvh - 52px);
 			overflow-y: auto;

@@ -690,42 +690,4 @@
 		}
 	}
 
-	@media (max-width: 640px) {
-		.modal {
-			top: 0;
-			left: 0;
-			right: 0;
-			transform: none;
-			width: 100vw;
-			max-height: 100dvh;
-			border-radius: 0;
-			border-bottom-left-radius: 0;
-			border-bottom-right-radius: 0;
-		}
-
-		.modal-header {
-			padding: 10px 12px;
-			padding-top: max(10px, env(safe-area-inset-top));
-		}
-
-		.modal-title {
-			font-size: 13px;
-		}
-
-		.modal-body {
-			padding: 10px 10px 16px;
-			padding-bottom: max(16px, env(safe-area-inset-bottom));
-		}
-
-		.control-input {
-			min-width: 0;
-			width: 100%;
-		}
-
-		.dijkstra-table th,
-		.dijkstra-table td {
-			padding: 5px 6px;
-			font-size: 10px;
-		}
-	}
 </style>
