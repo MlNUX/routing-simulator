@@ -19,8 +19,8 @@
 </script>
 
 <button
-	class="fixed top-2.5 left-2.5 flex h-10 w-10 items-center justify-center
-      rounded-xl p-2 transition-colors duration-200
+	class="fixed top-2.5 left-2.5 hidden h-10 w-10 items-center justify-center
+      rounded-xl p-2 transition-colors duration-200 sm:flex
       hover:bg-light-hover-white dark:hover:bg-blue-950"
 	on:click={toggleShortcuts}
 	data-help="Show the keyboard shortcuts."

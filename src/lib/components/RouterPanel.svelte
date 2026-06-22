@@ -121,11 +121,22 @@
 </script>
 
 <aside
-	class="absolute top-20 left-6 z-10 flex h-fit
+	class="absolute top-[100px] left-2 z-10 flex h-fit
   w-[210px] origin-top-left flex-col rounded-2xl bg-[rgba(223,243,255,0.96)] p-3 shadow-lg
-  dark:bg-dark-theme-blue/90 dark:shadow-sky-700/20"
+  sm:top-20 sm:left-6 dark:bg-dark-theme-blue/90 dark:shadow-sky-700/20"
 	transition:fly={{ x: -26, duration: 170 }}
 >
+	<div class="mb-2 flex items-center justify-between sm:hidden">
+		<span class="text-[10px] font-bold tracking-[0.12em] text-dark-blue uppercase dark:text-almost-white">Editor</span>
+		<button
+			class="flex h-6 w-6 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent text-dark-blue/60 hover:text-dark-blue dark:text-almost-white/60"
+			on:click={() => ui.toggleMenuOpen()}
+			aria-label="Close"
+		>
+			<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+		</button>
+	</div>
+
 	<button
 		class="cursor-pointer rounded-xl border border-slate-900/18 bg-cyan-600/10 px-2.5
   py-1.5 text-[11px] font-bold text-dark-blue hover:bg-cyan-600/16

@@ -92,7 +92,9 @@
 		COMPACT_BASE_HEIGHT + compactRowCount * COMPACT_ROW_HEIGHT
 	);
 	$: compactModalStyle = compactMode
-		? `width: min(${compactClampedWidthPx}px, calc(100vw - 32px)); height: min(${compactHeightPx}px, calc(100vh - 200px));`
+		? (safeViewportWidth < 640
+			? 'width: 100vw; height: 100dvh; left: 0; top: 0;'
+			: `width: min(${compactClampedWidthPx}px, calc(100vw - 32px)); height: min(${compactHeightPx}px, calc(100vh - 200px));`)
 		: '';
 
 	// WICHTIG: Standardmäßig Bellman-Ansicht aktiv
@@ -283,13 +285,16 @@
 
 	// --- Öffnen/Schließen Logik ---
 
+	let isMobile = false;
+	$: if (typeof window !== 'undefined') isMobile = window.innerWidth < 640;
+
 	let wasOpen = false;
 	$: if (open && !wasOpen) {
-		// Beim Öffnen: Reset auf Bellman & Full View
-		compactMode = false;
+		// Beim Öffnen: auf Mobile direkt Compact-View
+		compactMode = isMobile;
 		fullRoutersOpen = false;
 		fullStepsOpen = false;
-		ui.setHistoryCompactOpen(false);
+		ui.setHistoryCompactOpen(isMobile);
 		bellmanView = true;
 		rebuildIndexFromHistory();
 		wasOpen = true;
@@ -619,8 +624,15 @@
 		<div class="modal-header">
 			<div class="modal-actions">
 				{#if compactMode}
+					{#if isDistanceVector}
+						<button class="btn" class:btn--active={bellmanView} on:click={toggleViewMode}>
+							{bellmanView ? 'Bellman (PDF)' : 'Standard'}
+						</button>
+					{/if}
 					<button class="btn dark:text-dark-blue" on:click={toggleCompactAxis}>Swap axes</button>
-					<button class="btn dark:text-dark-blue" on:click={toggleCompactMode}>Full view</button>
+					{#if safeViewportWidth >= 640}
+						<button class="btn dark:text-dark-blue" on:click={toggleCompactMode}>Full view</button>
+					{/if}
 					<button class="btn btn--close" on:click={close} title="Close">✖</button>
 				{:else}
 					<button class="btn dark:text-dark-blue" on:click={toggleCompactMode}>Compact view</button>
@@ -1517,12 +1529,67 @@
 	}
 
 	@media (max-width: 640px) {
+		.modal {
+			top: 0;
+			left: 0;
+			right: 0;
+			transform: none;
+			width: 100vw;
+			height: 100dvh;
+			border-radius: 0;
+			display: flex;
+			flex-direction: column;
+		}
+
+		.modal--compact {
+			left: 0;
+			top: 0;
+			transform: none;
+			width: 100vw;
+			height: 100dvh;
+		}
+
+		.modal-header {
+			flex-shrink: 0;
+			padding: 10px 12px;
+			padding-top: max(10px, env(safe-area-inset-top));
+		}
+
+		.modal-actions {
+			gap: 6px;
+		}
+
+		.btn {
+			padding: 5px 8px;
+			font-size: 11px;
+		}
+
+		.modal-body,
+		.compact-body {
+			height: calc(100dvh - 52px);
+			overflow-y: auto;
+			overflow-x: hidden;
+			-webkit-overflow-scrolling: touch;
+			overscroll-behavior: contain;
+			touch-action: pan-y;
+			padding: 8px;
+			padding-bottom: max(16px, env(safe-area-inset-bottom));
+		}
+
 		.compact-grid-scroll {
+			overflow-x: auto;
+			-webkit-overflow-scrolling: touch;
 			padding-bottom: 14px;
 		}
 
 		.compact-grid-scroll::-webkit-scrollbar {
 			height: 18px;
+		}
+
+		.pdf-table th,
+		.pdf-table td {
+			padding: 4px 6px;
+			font-size: 11px;
 		}
 	}
 </style>

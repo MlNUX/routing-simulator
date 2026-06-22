@@ -27,8 +27,8 @@
 </script>
 
 <button
-	class="fixed top-2.5 right-2.5 mt-1.5 flex h-9 w-9 items-center justify-center
-    rounded-xl p-2 transition-colors duration-200
+	class="fixed top-2.5 right-2.5 mt-1.5 hidden h-9 w-9 items-center justify-center
+    rounded-xl p-2 transition-colors duration-200 sm:flex
     hover:bg-light-hover-white dark:hover:bg-blue-950"
 	on:click={toggleTheme}
 	data-help={darkMode ? 'Switch to the light theme.' : 'Switch to the dark theme.'}

@@ -24,6 +24,16 @@
 	let fileInput: HTMLInputElement | null = null;
 	let mobileMenuOpen = false;
 
+	let darkMode = false;
+	if (typeof window !== 'undefined') {
+		darkMode = document.documentElement.classList.contains('dark');
+	}
+	function toggleTheme() {
+		darkMode = !darkMode;
+		document.documentElement.classList.toggle('dark');
+		localStorage.setItem('theme', darkMode ? 'dark' : 'light');
+	}
+
 	type ScenarioEntry = {
 		name: string;
 		path: string;
@@ -363,7 +373,7 @@
 			<div class="my-3 border-t border-slate-200 dark:border-slate-700"></div>
 
 			<!-- Icon actions -->
-			<div class="grid grid-cols-4 gap-2">
+			<div class="grid grid-cols-5 gap-2">
 				<button
 					class={`flex flex-col items-center gap-1 rounded-xl py-2.5 text-[10px] font-semibold ${$uiState.helpMode ? 'bg-cyan-500 text-white' : 'bg-sky-50 text-dark-blue dark:bg-slate-800 dark:text-almost-white'}`}
 					on:click={() => { ui.toggleHelpMode(); mobileMenuOpen = false; }}
@@ -389,6 +399,13 @@
 					disabled={isRunning}
 				>
 					<img src="/icons/upload.svg" alt="" class="h-5 w-5" />Load
+				</button>
+				<button
+					class="flex flex-col items-center gap-1 rounded-xl bg-sky-50 py-2.5 text-[10px] font-semibold text-dark-blue dark:bg-slate-800 dark:text-almost-white"
+					on:click={() => { toggleTheme(); }}
+				>
+					<img src={darkMode ? '/icons/moon.svg' : '/icons/sun.svg'} alt="" class="h-5 w-5" />
+					{darkMode ? 'Light' : 'Dark'}
 				</button>
 			</div>
 		</div>

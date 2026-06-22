@@ -84,7 +84,7 @@
 	{/if}
 
 	<div
-		class="absolute bottom-4 left-1/2 z-10 w-[min(900px,96vw)] justify-center px-2 sm:bottom-6 sm:px-4"
+		class="absolute bottom-4 left-1/2 z-10 w-[min(900px,96vw)] justify-center px-2 sm:bottom-6 sm:px-4 {historyViewOpen ? 'hidden sm:block' : ''}"
 		style="transform: translateX(-50%) scale(var(--uiScale, 1)); transform-origin: bottom center; padding-bottom: env(safe-area-inset-bottom, 0px);"
 	>
 		<div
