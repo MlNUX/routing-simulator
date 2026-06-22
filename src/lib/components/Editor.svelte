@@ -581,7 +581,7 @@
 						? {
 								background: '#37bce1',
 								border: '1px solid #031416',
-								boxShadow: '0 44px 10px rgba(194, 65, 12, 0.25)',
+								boxShadow: '0 4px 10px rgba(55, 188, 225, 0.25)',
 								color: '#ffffff'
 							}
 						: undefined

@@ -5,11 +5,10 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
-RUN npm prune --production
 
 # ---- Serve stage ----
 FROM nginx:alpine
 COPY --from=build /app/build /usr/share/nginx/html
-EXPOSE 80
+COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]
-
