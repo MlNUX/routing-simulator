@@ -58,6 +58,7 @@
 	let fullRoutersOpen = false;
 	let fullStepsOpen = false;
 	let compactAxis: 'steps' | 'routers' = 'steps';
+	let lastKnownCompactSteps: Set<number> = new Set();
 
 	const COMPACT_COL_WIDTH = 320;
 	const COMPACT_MIN_WIDTH = 380;
@@ -296,6 +297,7 @@
 		fullStepsOpen = false;
 		ui.setHistoryCompactOpen(isMobile);
 		bellmanView = true;
+		lastKnownCompactSteps = new Set();
 		rebuildIndexFromHistory();
 		wasOpen = true;
 	}
@@ -313,8 +315,11 @@
 
 	$: if (compactMode) {
 		const stepSet = new Set(visibleSteps);
-		const filtered = compactSelectedSteps.filter((s) => stepSet.has(s)).sort((a, b) => a - b);
-		compactSelectedSteps = filtered.length > 0 ? filtered : [...visibleSteps];
+		const filtered = compactSelectedSteps.filter((s) => stepSet.has(s));
+		const brandNew = visibleSteps.filter((s) => !lastKnownCompactSteps.has(s));
+		const merged = [...new Set([...filtered, ...brandNew])].sort((a, b) => a - b);
+		compactSelectedSteps = merged.length > 0 ? merged : [...visibleSteps];
+		lastKnownCompactSteps = new Set(visibleSteps);
 
 		const routerSet = new Set(allRouterIds);
 		compactSelectedRouters = compactSelectedRouters.filter((id) => routerSet.has(id));
@@ -351,6 +356,7 @@
 		compactMode = !compactMode;
 		ui.setHistoryCompactOpen(compactMode);
 		if (compactMode) {
+			lastKnownCompactSteps = new Set();
 			ui.setRoutingHover(null, null);
 			fullRoutersOpen = false;
 			fullStepsOpen = false;
@@ -361,6 +367,7 @@
 				compactSelectedRouters = [...allRouterIds];
 			}
 		} else {
+			lastKnownCompactSteps = new Set();
 			compactRoutersOpen = false;
 			compactStepsOpen = false;
 			selectedSteps = getVisibleHistorySteps(
@@ -1285,6 +1292,7 @@
 		max-width: 100%;
 		overflow-x: auto;
 		overflow-y: hidden;
+		flex-shrink: 0;
 		padding-bottom: 10px;
 		scrollbar-gutter: stable both-edges;
 		scrollbar-width: auto;
