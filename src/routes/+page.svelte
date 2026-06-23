@@ -9,6 +9,7 @@
 	import Timeline from '$lib/components/Timeline.svelte';
 	import PlaybackControls from '$lib/components/PlaybackControls.svelte';
 	import RouterTablePanel from '$lib/components/RouterTablePanel.svelte';
+	import ExplainPanel from '$lib/components/ExplainPanel.svelte';
 	import ErrorToast from '$lib/components/ErrorToast.svelte';
 	import ConfirmMenu from '$lib/components/ConfirmMenu.svelte';
 	import SurferWindow from '$lib/components/SurferWindow.svelte';
@@ -63,6 +64,7 @@
 		<Editor />
 	</div>
 
+	<ExplainPanel />
 	<ErrorToast open={toastOpen} message={toastMessage} timeout={4000} onClose={hideErrorToast} />
 	<ConfirmMenu />
 	<SurferWindow />

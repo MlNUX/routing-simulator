@@ -1,7 +1,8 @@
 import { writable, derived, type Readable, type Writable } from 'svelte/store';
 
 import { SimulationUI } from './SimulationUI';
-import { uiState as uiStateStore, type UIState } from './uiState';
+import { uiState as uiStateStore, type UIState, type ExplainCell } from './uiState';
+export type { ExplainCell };
 
 import { SimulationController, type PlacementMode } from '../model/SimulationController';
 import { Topology } from '../model/Topology';

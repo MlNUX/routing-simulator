@@ -357,7 +357,7 @@
 				<button
 					class="rounded-xl bg-secondary/20 px-4 py-2.5 text-left text-[12px] font-semibold text-dark-blue dark:text-almost-white"
 					on:click={() => { isLinkState ? ui.setShowDijkstraModal(!$uiState.showDijkstraModal) : ui.setShowHistoryModal(!$uiState.showHistoryModal); mobileMenuOpen = false; }}
-				>Zustände</button>
+				>States</button>
 				<button
 					class="rounded-xl bg-secondary/20 px-4 py-2.5 text-left text-[12px] font-semibold text-dark-blue dark:text-almost-white"
 					on:click={() => { handleChoosePreset(); mobileMenuOpen = false; }}
@@ -454,7 +454,7 @@
 					on:click={() => isLinkState ? ui.setShowDijkstraModal(!$uiState.showDijkstraModal) : ui.setShowHistoryModal(!$uiState.showHistoryModal)}
 					data-help="Show routing information."
 					data-help-pos="bottom"
-				>Zustände</button>
+				>States</button>
 
 				{#if $uiState.debugUnlocked}
 					<button

@@ -15,6 +15,14 @@ export type PacketPreview = {
 	error: string | null;
 };
 
+export type ExplainCell = {
+	routerId: string;
+	destId: string;
+	rowId: string; // via / neighbor
+	step: number;
+	isBellman: boolean;
+};
+
 /**
  * Beschreibt den gesamten Zustand der Benutzeroberflaeche.
  */
@@ -72,6 +80,11 @@ export type UIState = {
 		}[];
 	};
 
+	// Explain panel
+	explainCell: ExplainCell | null;
+	explainPathLinkIds: string[] | null;
+	explainPathNodeIds: string[] | null;
+
 	// Easter Egg
 	showSurfer: boolean;
 
@@ -127,6 +140,10 @@ export function createInitialUIState(): UIState {
 		showDijkstraModal: false,
 		showScenarioModal: false,
 		historyFilterRouterId: null,
+
+		explainCell: null,
+		explainPathLinkIds: null,
+		explainPathNodeIds: null,
 
 		isDragOver: false,
 		playbackIntervalMs: 3000,

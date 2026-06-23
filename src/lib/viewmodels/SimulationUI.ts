@@ -10,7 +10,7 @@ import type { SimulationEvent } from '../model/SimulationEvent';
 import type { SimulationState } from '../model/SimulationState';
 import { Topology } from '../model/Topology';
 
-import type { UIState } from './uiState';
+import type { UIState, ExplainCell } from './uiState';
 import { createInitialPacketPreview } from './uiState';
 
 /**
@@ -613,10 +613,14 @@ export class SimulationUI {
 	public clear(): void {
 		this.clearPlaybackTimer();
 		this.simulation.update((controller) => {
-			// Neuen Controller mit leerer Topologie erzeugen (keine Router, keine Links).
-			return new (controller.constructor as any)(
+			const algo = (controller as any).algorithmType ?? controller.algorithm;
+			const next = new (controller.constructor as any)(
 				new Topology(new Map(), [])
 			) as SimulationController;
+			if (algo && typeof (next as any).setAlgorithm === 'function') {
+				(next as any).setAlgorithm(algo);
+			}
+			return next;
 		});
 
 		this.uiState.update((s) => ({
@@ -642,11 +646,16 @@ export class SimulationUI {
 	public reset(): void {
 		this.clearPlaybackTimer();
 		this.simulation.update((controller) => {
+			const algo = (controller as any).algorithmType ?? controller.algorithm;
 			const topo =
 				typeof (controller as any).getInitialTopology === 'function'
 					? (controller as any).getInitialTopology()
 					: controller.getTopology();
-			return new (controller.constructor as any)(topo) as SimulationController;
+			const next = new (controller.constructor as any)(topo) as SimulationController;
+			if (algo && typeof (next as any).setAlgorithm === 'function') {
+				(next as any).setAlgorithm(algo);
+			}
+			return next;
 		});
 
 		this.uiState.update((s) => ({
@@ -869,6 +878,18 @@ export class SimulationUI {
 			linkDraftSourceId: null,
 			routingHover: { sourceId: null, targetId: null }
 		}));
+	}
+
+	public setExplainCell(cell: ExplainCell | null): void {
+		this.uiState.update((s) => ({ ...s, explainCell: cell }));
+	}
+
+	public setExplainPathLinkIds(links: string[] | null): void {
+		this.uiState.update((s) => ({ ...s, explainPathLinkIds: links }));
+	}
+
+	public setExplainPathNodeIds(ids: string[] | null): void {
+		this.uiState.update((s) => ({ ...s, explainPathNodeIds: ids }));
 	}
 
 	/**

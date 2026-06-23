@@ -30,6 +30,7 @@
 		destIds: string[];
 		values: Record<string, Record<string, DtCell>>;
 		minByDest: Record<string, number>;
+		linkCosts: Record<string, number | null>;
 	};
 	type DvTableResult = { ok: true; table: DvTable } | { ok: false; error: string };
 	type DtTableResult = { ok: true; table: DtTable } | { ok: false; error: string };
@@ -484,11 +485,13 @@
 
 		const values: Record<string, Record<string, DtCell>> = {};
 		const minByDest: Record<string, number> = {};
+		const linkCosts: Record<string, number | null> = {};
 		for (const dest of destIds) minByDest[dest] = Infinity;
 
 		for (const rowId of rowIds) {
 			const row: Record<string, DtCell> = {};
 			const linkCost = linkWeightBetween(rid, rowId, topo);
+			linkCosts[rowId] = linkCost;
 			const dvRow = state.values?.[rowId] ?? {};
 
 			for (const dest of destIds) {
@@ -506,7 +509,7 @@
 
 		return {
 			ok: true,
-			table: { routerId: rid, rowIds, destIds, values, minByDest }
+			table: { routerId: rid, rowIds, destIds, values, minByDest, linkCosts }
 		};
 	}
 
@@ -567,6 +570,17 @@
 		return stepTypeMap.get(step) === 'update';
 	}
 
+	function prevRecomputeStepFor(s: number): number | null {
+		const idx = allSteps.indexOf(s);
+		for (let i = idx - 1; i >= 0; i--) {
+			const t = stepTypeMap.get(allSteps[i]) ?? '';
+			if (t !== 'send' && t !== 'update') {
+				return allSteps[i];
+			}
+		}
+		return null;
+	}
+
 	function setHoverRouting(sourceId: string | null, targetId: string | null): void {
 		if (compactMode && (sourceId !== null || targetId !== null)) return;
 		ui.setRoutingHover(sourceId, targetId);
@@ -575,6 +589,7 @@
 	function close(): void {
 		fullRoutersOpen = false;
 		fullStepsOpen = false;
+		explainMode = false;
 		ui.setHistoryCompactOpen(false);
 		ui.setRoutingHover(null, null);
 		if (typeof onClose === 'function') onClose();
@@ -613,6 +628,21 @@
 		const phase = getPhaseLabel(s);
 		return phase ? `Step ${s} (${phase})` : `Step ${s}`;
 	}
+
+	// ── Explain mode ─────────────────────────────────────────────────────────
+
+	let explainMode = false;
+
+	function toggleExplainMode() {
+		explainMode = !explainMode;
+		if (!explainMode) ui.setExplainCell(null);
+	}
+
+	function handleExplainCellClick(routerId: string, destId: string, rowId: string, step: number) {
+		if (!explainMode) return;
+		ui.setExplainCell({ routerId, destId, rowId, step, isBellman: bellmanView });
+		close();
+	}
 </script>
 
 <svelte:window bind:innerWidth={viewportWidth} />
@@ -636,6 +666,11 @@
 							{bellmanView ? 'Bellman (PDF)' : 'Standard'}
 						</button>
 					{/if}
+					{#if isDistanceVector && bellmanView}
+						<button class="btn" class:btn--active={explainMode} on:click={toggleExplainMode}>
+							{explainMode ? 'Cancel explain' : 'Explain field'}
+						</button>
+					{/if}
 					<button class="btn dark:text-dark-blue" on:click={toggleCompactAxis}>Swap axes</button>
 					{#if safeViewportWidth >= 640}
 						<button class="btn dark:text-dark-blue" on:click={toggleCompactMode}>Full view</button>
@@ -646,6 +681,11 @@
 					{#if isDistanceVector}
 						<button class="btn" class:btn--active={bellmanView} on:click={toggleViewMode}>
 							{bellmanView ? 'Bellman view (PDF)' : 'Standard view'}
+						</button>
+					{/if}
+					{#if isDistanceVector && bellmanView}
+						<button class="btn" class:btn--active={explainMode} on:click={toggleExplainMode}>
+							{explainMode ? 'Cancel explain' : 'Explain field'}
 						</button>
 					{/if}
 					<button class="btn btn--close" on:click={close} title="Close">✖</button>
@@ -729,6 +769,15 @@
 					</label>
 				</div>
 
+				{#if bellmanView}
+					<div class="legend">
+						<span class="legend-item"><span class="legend-swatch swatch-normal"></span> Unchanged</span>
+						<span class="legend-item"><span class="legend-swatch swatch-changed"></span> Changed vs. previous step</span>
+						<span class="legend-item"><span class="legend-swatch swatch-inf"></span> ∞</span>
+						<span class="legend-item"><span class="legend-swatch swatch-link-changed"></span> Link weight changed</span>
+					</div>
+				{/if}
+
 				<div class="tables">
 					{#if selectedRouters.length === 0 || selectedSteps.length === 0}
 						<div class="empty big">Please select at least one router and one time slot.</div>
@@ -767,7 +816,9 @@
 										<div class="matrix-cell">
 											{#if bellmanView}
 												{@const dtRes = bellmanTableFor(rid, s)}
-												{@const prevBellman = isUpdate ? bellmanTableFor(rid, s - 1) : null}
+												{@const prevStep = prevRecomputeStepFor(s)}
+												{@const prevBellman = prevStep !== null ? bellmanTableFor(rid, prevStep) : null}
+												{@const changedLinkRowIds = new Set(dtRes.table.rowIds.filter((r) => { const lc = dtRes.table.linkCosts[r]; const pl = prevBellman?.ok ? prevBellman.table.linkCosts[r] : undefined; return pl !== undefined && lc !== pl; }))}
 												{#if !dtRes.ok}
 													<div class="empty-cell">Keine Daten</div>
 												{:else}
@@ -781,7 +832,7 @@
 																	D<sup style="margin-left:1px;">{routerLabel}</sup>
 																</th>
 																{#each dtRes.table.rowIds as rowId (rowId)}
-																	<th>{rowId}</th>
+																	<th>{routerDisplayNameAny(rowId)}</th>
 																{/each}
 															</tr>
 														</thead>
@@ -791,18 +842,16 @@
 																	<td class="td-row-head">{dest}</td>
 																	{#each dtRes.table.rowIds as rowId (rowId)}
 																		{@const val = dtCell(dtRes.table, rowId, dest)}
-																		{@const min = dtMinimum(dtRes.table, dest)}
-																		{@const isBest =
-																			val?.dist !== undefined &&
-																			val.dist !== Infinity &&
-																			val.dist === min}
 																		{@const prevVal = previousDtCell(prevBellman, rowId, dest)}
-																		{@const isChanged = isUpdate && dtCellChanged(val, prevVal)}
+																		{@const isChanged = dtCellChanged(val, prevVal)}
 																		<td
-																			class:cell-best={isBest}
+																			class:cell-normal={val?.dist !== Infinity && !isChanged}
 																			class:cell-inf={val?.dist === Infinity}
-																			class:cell-changed={isChanged}
+																			class:cell-link-changed={changedLinkRowIds.has(rowId)}
+																			class:cell-changed={isChanged && !changedLinkRowIds.has(rowId)}
+																			class:explain-selectable={explainMode}
 																			on:mouseenter={() => setHoverRouting(rowId, dest)}
+																			on:click={() => handleExplainCellClick(rid, dest, rowId, s)}
 																		>
 																			{formatDtCell(val)}
 																		</td>
@@ -917,6 +966,15 @@
 					</label>
 				</div>
 
+				{#if bellmanView}
+					<div class="legend">
+						<span class="legend-item"><span class="legend-swatch swatch-normal"></span> Unchanged</span>
+						<span class="legend-item"><span class="legend-swatch swatch-changed"></span> Changed vs. previous step</span>
+						<span class="legend-item"><span class="legend-swatch swatch-inf"></span> ∞</span>
+						<span class="legend-item"><span class="legend-swatch swatch-link-changed"></span> Link weight changed</span>
+					</div>
+				{/if}
+
 				{#if compactSelectedRouters.length === 0 || compactSelectedSteps.length === 0}
 					<div class="empty big">Please select at least one router and one time slot.</div>
 				{:else if compactRouterIds.length === 0}
@@ -936,7 +994,9 @@
 												</div>
 												{#if bellmanView}
 													{@const dtRes = bellmanTableFor(rid, s)}
-													{@const prevBellman = isUpdate ? bellmanTableFor(rid, s - 1) : null}
+													{@const prevStep = prevRecomputeStepFor(s)}
+													{@const prevBellman = prevStep !== null ? bellmanTableFor(rid, prevStep) : null}
+													{@const changedLinkRowIds = new Set(dtRes.table.rowIds.filter((r) => { const lc = dtRes.table.linkCosts[r]; const pl = prevBellman?.ok ? prevBellman.table.linkCosts[r] : undefined; return pl !== undefined && lc !== pl; }))}
 													{#if !dtRes.ok}
 														<div class="empty-cell">Keine Daten</div>
 													{:else}
@@ -950,7 +1010,7 @@
 																		D<sup style="margin-left:1px;">{routerDisplayNameAny(rid)}</sup>
 																	</th>
 																	{#each dtRes.table.rowIds as rowId (rowId)}
-																		<th>{rowId}</th>
+																		<th>{routerDisplayNameAny(rowId)}</th>
 																	{/each}
 																</tr>
 															</thead>
@@ -960,18 +1020,16 @@
 																		<td class="td-row-head">{dest}</td>
 																		{#each dtRes.table.rowIds as rowId (rowId)}
 																			{@const val = dtCell(dtRes.table, rowId, dest)}
-																			{@const min = dtMinimum(dtRes.table, dest)}
-																			{@const isBest =
-																				val?.dist !== undefined &&
-																				val.dist !== Infinity &&
-																				val.dist === min}
 																			{@const prevVal = previousDtCell(prevBellman, rowId, dest)}
-																			{@const isChanged = isUpdate && dtCellChanged(val, prevVal)}
+																			{@const isChanged = dtCellChanged(val, prevVal)}
 																			<td
-																				class:cell-best={isBest}
+																				class:cell-normal={val?.dist !== Infinity && !isChanged}
 																				class:cell-inf={val?.dist === Infinity}
-																				class:cell-changed={isChanged}
+																				class:cell-link-changed={changedLinkRowIds.has(rowId)}
+																				class:cell-changed={isChanged && !changedLinkRowIds.has(rowId)}
+																				class:explain-selectable={explainMode}
 																				on:mouseenter={() => setHoverRouting(rowId, dest)}
+																				on:click={() => handleExplainCellClick(rid, dest, rowId, s)}
 																			>
 																				{formatDtCell(val)}
 																			</td>
@@ -1035,7 +1093,9 @@
 												<div class="compact-item-title">{compactStepLabel(s)}</div>
 												{#if bellmanView}
 													{@const dtRes = bellmanTableFor(rid, s)}
-													{@const prevBellman = isUpdate ? bellmanTableFor(rid, s - 1) : null}
+													{@const prevStep = prevRecomputeStepFor(s)}
+													{@const prevBellman = prevStep !== null ? bellmanTableFor(rid, prevStep) : null}
+													{@const changedLinkRowIds = new Set(dtRes.table.rowIds.filter((r) => { const lc = dtRes.table.linkCosts[r]; const pl = prevBellman?.ok ? prevBellman.table.linkCosts[r] : undefined; return pl !== undefined && lc !== pl; }))}
 													{#if !dtRes.ok}
 														<div class="empty-cell">No data</div>
 													{:else}
@@ -1049,7 +1109,7 @@
 																		D<sup style="margin-left:1px;">{routerDisplayNameAny(rid)}</sup>
 																	</th>
 																	{#each dtRes.table.rowIds as rowId (rowId)}
-																		<th>{rowId}</th>
+																		<th>{routerDisplayNameAny(rowId)}</th>
 																	{/each}
 																</tr>
 															</thead>
@@ -1059,18 +1119,16 @@
 																		<td class="td-row-head">{dest}</td>
 																		{#each dtRes.table.rowIds as rowId (rowId)}
 																			{@const val = dtCell(dtRes.table, rowId, dest)}
-																			{@const min = dtMinimum(dtRes.table, dest)}
-																			{@const isBest =
-																				val?.dist !== undefined &&
-																				val.dist !== Infinity &&
-																				val.dist === min}
 																			{@const prevVal = previousDtCell(prevBellman, rowId, dest)}
-																			{@const isChanged = isUpdate && dtCellChanged(val, prevVal)}
+																			{@const isChanged = dtCellChanged(val, prevVal)}
 																			<td
-																				class:cell-best={isBest}
+																				class:cell-normal={val?.dist !== Infinity && !isChanged}
 																				class:cell-inf={val?.dist === Infinity}
-																				class:cell-changed={isChanged}
+																				class:cell-link-changed={changedLinkRowIds.has(rowId)}
+																				class:cell-changed={isChanged && !changedLinkRowIds.has(rowId)}
+																				class:explain-selectable={explainMode}
 																				on:mouseenter={() => setHoverRouting(rowId, dest)}
+																				on:click={() => handleExplainCellClick(rid, dest, rowId, s)}
 																			>
 																				{formatDtCell(val)}
 																			</td>
@@ -1353,10 +1411,59 @@
 		font-weight: 700;
 	}
 
-	/* Legend */
-	.cell-changed {
-		color: #dc2626;
+	/* Cell with changed link weight */
+	.cell-link-changed {
+		background-color: #fecaca !important;
+		color: #dc2626 !important;
 		font-weight: 700;
+	}
+
+	/* Legend bar */
+	.legend {
+		display: flex;
+		gap: 16px;
+		padding: 6px 12px;
+		background: #f8fafc;
+		border-bottom: 1px solid #e2e8f0;
+		flex-shrink: 0;
+		flex-wrap: wrap;
+	}
+	.legend-item {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 12px;
+		color: #475569;
+	}
+	.legend-swatch {
+		display: inline-block;
+		width: 16px;
+		height: 16px;
+		border-radius: 3px;
+		border: 1px solid #94a3b8;
+	}
+	.swatch-normal { background: #cbd5e1; }
+	.swatch-changed { background: #5b9bd5; border-color: #3b82f6; }
+	.swatch-inf { background: #fff; }
+	.swatch-link-changed { background: #fecaca; border-color: #dc2626; }
+
+	/* Cell colors */
+	.cell-normal {
+		background-color: #cbd5e1;
+	}
+	.cell-changed {
+		background-color: #5b9bd5 !important;
+		color: #fff;
+		font-weight: 700;
+	}
+
+	.explain-selectable {
+		cursor: crosshair;
+	}
+	.explain-selectable:hover {
+		outline: 2px solid #f59e0b;
+		outline-offset: -2px;
+		background: rgba(245, 158, 11, 0.15) !important;
 	}
 
 	/* Matrix Area */

@@ -6,7 +6,7 @@
 			"topology": {
 				"nodes": [
 					{
-						"id": "R1",
+						"id": "A",
 						"type": "ROUTER",
 						"name": "A",
 						"xPos": 120,
@@ -15,17 +15,17 @@
 						"routingTable": {
 							"entries": [
 								{
-									"destinationId": "R1",
-									"nextHopId": "R1",
+									"destinationId": "A",
+									"nextHopId": "A",
 									"cost": 0
 								},
 								{
-									"destinationId": "R2",
+									"destinationId": "B",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R3",
+									"destinationId": "C",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								}
@@ -33,7 +33,7 @@
 						}
 					},
 					{
-						"id": "R2",
+						"id": "B",
 						"type": "ROUTER",
 						"name": "B",
 						"xPos": 360,
@@ -42,17 +42,17 @@
 						"routingTable": {
 							"entries": [
 								{
-									"destinationId": "R1",
+									"destinationId": "A",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R2",
-									"nextHopId": "R2",
+									"destinationId": "B",
+									"nextHopId": "B",
 									"cost": 0
 								},
 								{
-									"destinationId": "R3",
+									"destinationId": "C",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								}
@@ -60,7 +60,7 @@
 						}
 					},
 					{
-						"id": "R3",
+						"id": "C",
 						"type": "ROUTER",
 						"name": "C",
 						"xPos": 240,
@@ -69,18 +69,18 @@
 						"routingTable": {
 							"entries": [
 								{
-									"destinationId": "R1",
+									"destinationId": "A",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R2",
+									"destinationId": "B",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R3",
-									"nextHopId": "R3",
+									"destinationId": "C",
+									"nextHopId": "C",
 									"cost": 0
 								}
 							]
@@ -90,20 +90,20 @@
 				"links": [
 					{
 						"id": "L1",
-						"sourceId": "R1",
-						"targetId": "R2",
+						"sourceId": "A",
+						"targetId": "B",
 						"weight": 60
 					},
 					{
 						"id": "L2",
-						"sourceId": "R1",
-						"targetId": "R3",
+						"sourceId": "A",
+						"targetId": "C",
 						"weight": 8
 					},
 					{
 						"id": "L3",
-						"sourceId": "R2",
-						"targetId": "R3",
+						"sourceId": "B",
+						"targetId": "C",
 						"weight": 2
 					}
 				]
@@ -116,7 +116,7 @@
 			"topology": {
 				"nodes": [
 					{
-						"id": "R1",
+						"id": "A",
 						"type": "ROUTER",
 						"name": "A",
 						"xPos": 120,
@@ -125,25 +125,25 @@
 						"routingTable": {
 							"entries": [
 								{
-									"destinationId": "R1",
-									"nextHopId": "R1",
+									"destinationId": "A",
+									"nextHopId": "A",
 									"cost": 0
 								},
 								{
-									"destinationId": "R2",
-									"nextHopId": "R3",
+									"destinationId": "B",
+									"nextHopId": "C",
 									"cost": 10
 								},
 								{
-									"destinationId": "R3",
-									"nextHopId": "R3",
+									"destinationId": "C",
+									"nextHopId": "C",
 									"cost": 8
 								}
 							]
 						}
 					},
 					{
-						"id": "R2",
+						"id": "B",
 						"type": "ROUTER",
 						"name": "B",
 						"xPos": 360,
@@ -152,25 +152,25 @@
 						"routingTable": {
 							"entries": [
 								{
-									"destinationId": "R1",
-									"nextHopId": "R3",
+									"destinationId": "A",
+									"nextHopId": "C",
 									"cost": 10
 								},
 								{
-									"destinationId": "R2",
-									"nextHopId": "R2",
+									"destinationId": "B",
+									"nextHopId": "B",
 									"cost": 0
 								},
 								{
-									"destinationId": "R3",
-									"nextHopId": "R3",
+									"destinationId": "C",
+									"nextHopId": "C",
 									"cost": 2
 								}
 							]
 						}
 					},
 					{
-						"id": "R3",
+						"id": "C",
 						"type": "ROUTER",
 						"name": "C",
 						"xPos": 240,
@@ -179,18 +179,18 @@
 						"routingTable": {
 							"entries": [
 								{
-									"destinationId": "R1",
-									"nextHopId": "R1",
+									"destinationId": "A",
+									"nextHopId": "A",
 									"cost": 8
 								},
 								{
-									"destinationId": "R2",
-									"nextHopId": "R2",
+									"destinationId": "B",
+									"nextHopId": "B",
 									"cost": 2
 								},
 								{
-									"destinationId": "R3",
-									"nextHopId": "R3",
+									"destinationId": "C",
+									"nextHopId": "C",
 									"cost": 0
 								}
 							]
@@ -200,20 +200,20 @@
 				"links": [
 					{
 						"id": "L1",
-						"sourceId": "R1",
-						"targetId": "R2",
+						"sourceId": "A",
+						"targetId": "B",
 						"weight": 60
 					},
 					{
 						"id": "L2",
-						"sourceId": "R1",
-						"targetId": "R3",
+						"sourceId": "A",
+						"targetId": "C",
 						"weight": 8
 					},
 					{
 						"id": "L3",
-						"sourceId": "R2",
-						"targetId": "R3",
+						"sourceId": "B",
+						"targetId": "C",
 						"weight": 2
 					}
 				]
@@ -226,7 +226,7 @@
 			"topology": {
 				"nodes": [
 					{
-						"id": "R1",
+						"id": "A",
 						"type": "ROUTER",
 						"name": "A",
 						"xPos": 120,
@@ -235,25 +235,25 @@
 						"routingTable": {
 							"entries": [
 								{
-									"destinationId": "R1",
-									"nextHopId": "R1",
+									"destinationId": "A",
+									"nextHopId": "A",
 									"cost": 0
 								},
 								{
-									"destinationId": "R2",
-									"nextHopId": "R3",
+									"destinationId": "B",
+									"nextHopId": "C",
 									"cost": 10
 								},
 								{
-									"destinationId": "R3",
-									"nextHopId": "R3",
+									"destinationId": "C",
+									"nextHopId": "C",
 									"cost": 8
 								}
 							]
 						}
 					},
 					{
-						"id": "R2",
+						"id": "B",
 						"type": "ROUTER",
 						"name": "B",
 						"xPos": 360,
@@ -262,25 +262,25 @@
 						"routingTable": {
 							"entries": [
 								{
-									"destinationId": "R1",
-									"nextHopId": "R3",
+									"destinationId": "A",
+									"nextHopId": "C",
 									"cost": 10
 								},
 								{
-									"destinationId": "R2",
-									"nextHopId": "R2",
+									"destinationId": "B",
+									"nextHopId": "B",
 									"cost": 0
 								},
 								{
-									"destinationId": "R3",
-									"nextHopId": "R3",
+									"destinationId": "C",
+									"nextHopId": "C",
 									"cost": 2
 								}
 							]
 						}
 					},
 					{
-						"id": "R3",
+						"id": "C",
 						"type": "ROUTER",
 						"name": "C",
 						"xPos": 240,
@@ -289,18 +289,18 @@
 						"routingTable": {
 							"entries": [
 								{
-									"destinationId": "R1",
-									"nextHopId": "R1",
+									"destinationId": "A",
+									"nextHopId": "A",
 									"cost": 8
 								},
 								{
-									"destinationId": "R2",
-									"nextHopId": "R2",
+									"destinationId": "B",
+									"nextHopId": "B",
 									"cost": 2
 								},
 								{
-									"destinationId": "R3",
-									"nextHopId": "R3",
+									"destinationId": "C",
+									"nextHopId": "C",
 									"cost": 0
 								}
 							]
@@ -310,20 +310,20 @@
 				"links": [
 					{
 						"id": "L1",
-						"sourceId": "R1",
-						"targetId": "R2",
+						"sourceId": "A",
+						"targetId": "B",
 						"weight": 60
 					},
 					{
 						"id": "L2",
-						"sourceId": "R1",
-						"targetId": "R3",
+						"sourceId": "A",
+						"targetId": "C",
 						"weight": 80
 					},
 					{
 						"id": "L3",
-						"sourceId": "R2",
-						"targetId": "R3",
+						"sourceId": "B",
+						"targetId": "C",
 						"weight": 2
 					}
 				]

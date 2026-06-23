@@ -6,7 +6,7 @@
 			"topology": {
 				"nodes": [
 					{
-						"id": "R1",
+						"id": "A",
 						"type": "ROUTER",
 						"name": "A",
 						"xPos": 120,
@@ -15,27 +15,27 @@
 						"routingTable": {
 							"entries": [
 								{
-									"destinationId": "R1",
-									"nextHopId": "R1",
+									"destinationId": "A",
+									"nextHopId": "A",
 									"cost": 0
 								},
 								{
-									"destinationId": "R2",
+									"destinationId": "B",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R3",
+									"destinationId": "C",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R4",
+									"destinationId": "D",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R5",
+									"destinationId": "E",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								}
@@ -43,7 +43,7 @@
 						}
 					},
 					{
-						"id": "R2",
+						"id": "B",
 						"type": "ROUTER",
 						"name": "B",
 						"xPos": 360,
@@ -52,27 +52,27 @@
 						"routingTable": {
 							"entries": [
 								{
-									"destinationId": "R1",
+									"destinationId": "A",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R2",
-									"nextHopId": "R2",
+									"destinationId": "B",
+									"nextHopId": "B",
 									"cost": 0
 								},
 								{
-									"destinationId": "R3",
+									"destinationId": "C",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R4",
+									"destinationId": "D",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R5",
+									"destinationId": "E",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								}
@@ -80,7 +80,7 @@
 						}
 					},
 					{
-						"id": "R3",
+						"id": "C",
 						"type": "ROUTER",
 						"name": "C",
 						"xPos": 200,
@@ -89,27 +89,27 @@
 						"routingTable": {
 							"entries": [
 								{
-									"destinationId": "R1",
+									"destinationId": "A",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R2",
+									"destinationId": "B",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R3",
-									"nextHopId": "R3",
+									"destinationId": "C",
+									"nextHopId": "C",
 									"cost": 0
 								},
 								{
-									"destinationId": "R4",
+									"destinationId": "D",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R5",
+									"destinationId": "E",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								}
@@ -117,7 +117,7 @@
 						}
 					},
 					{
-						"id": "R4",
+						"id": "D",
 						"type": "ROUTER",
 						"name": "D",
 						"xPos": 300,
@@ -126,27 +126,27 @@
 						"routingTable": {
 							"entries": [
 								{
-									"destinationId": "R1",
+									"destinationId": "A",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R2",
+									"destinationId": "B",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R3",
+									"destinationId": "C",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R4",
-									"nextHopId": "R4",
+									"destinationId": "D",
+									"nextHopId": "D",
 									"cost": 0
 								},
 								{
-									"destinationId": "R5",
+									"destinationId": "E",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								}
@@ -154,7 +154,7 @@
 						}
 					},
 					{
-						"id": "R5",
+						"id": "E",
 						"type": "ROUTER",
 						"name": "E",
 						"xPos": 420,
@@ -163,28 +163,28 @@
 						"routingTable": {
 							"entries": [
 								{
-									"destinationId": "R1",
+									"destinationId": "A",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R2",
+									"destinationId": "B",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R3",
+									"destinationId": "C",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R4",
+									"destinationId": "D",
 									"nextHopId": "-",
 									"cost": "Infinity"
 								},
 								{
-									"destinationId": "R5",
-									"nextHopId": "R5",
+									"destinationId": "E",
+									"nextHopId": "E",
 									"cost": 0
 								}
 							]
@@ -194,38 +194,38 @@
 				"links": [
 					{
 						"id": "L1",
-						"sourceId": "R1",
-						"targetId": "R3",
+						"sourceId": "A",
+						"targetId": "C",
 						"weight": 1
 					},
 					{
 						"id": "L2",
-						"sourceId": "R1",
-						"targetId": "R2",
+						"sourceId": "A",
+						"targetId": "B",
 						"weight": 4
 					},
 					{
 						"id": "L3",
-						"sourceId": "R3",
-						"targetId": "R4",
+						"sourceId": "C",
+						"targetId": "D",
 						"weight": 5
 					},
 					{
 						"id": "L4",
-						"sourceId": "R4",
-						"targetId": "R2",
+						"sourceId": "D",
+						"targetId": "B",
 						"weight": 2
 					},
 					{
 						"id": "L5",
-						"sourceId": "R2",
-						"targetId": "R5",
+						"sourceId": "B",
+						"targetId": "E",
 						"weight": 4
 					},
 					{
 						"id": "L6",
-						"sourceId": "R4",
-						"targetId": "R5",
+						"sourceId": "D",
+						"targetId": "E",
 						"weight": 1
 					}
 				]

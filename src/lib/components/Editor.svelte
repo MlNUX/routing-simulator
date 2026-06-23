@@ -14,6 +14,7 @@
 
 	import RouterNode from '$lib/components/RouterNode.svelte';
 	import WeightedEdge from '$lib/components/WeightedEdge.svelte';
+	import PacketAnimation from '$lib/components/PacketAnimation.svelte';
 
 	const proOptions = { hideAttribution: true };
 
@@ -72,13 +73,60 @@
 	let selectedRouterId: string | null = null;
 	let draggingNodeIdSet = new Set<string>();
 
+	let explainSourceId: string | null = null;
+	let explainNexthopId: string | null = null;
+	let explainDestId: string | null = null;
+	let explainEdgeLinkId: string | null = null;
+	let explainPathLinkIdSet = new Set<string>();
+	let explainPathNodeIds: string[] = [];
+	let packetRouteNodeIds: string[] = [];
+	let viewportPan = { x: 0, y: 0 };
+
 	$: {
 		uiHighlightedLinkIdSet = new Set<string>(($uiState?.highlightedLinkIds ?? []) as string[]);
 		actualRouteLinkIdSet = new Set<string>(($uiState?.actualRouteLinkIds ?? []) as string[]);
 		hoverSourceNodeId = $uiState?.routingHover?.sourceId ?? null;
 		hoverTargetNodeId = $uiState?.routingHover?.targetId ?? null;
 		selectedRouterId = $uiState?.selectedRouterId ?? null;
+		const ec = ($uiState as any)?.explainCell ?? null;
+		explainSourceId = ec?.routerId ?? null;
+		explainNexthopId = ec?.rowId ?? null;
+		explainDestId = ec?.destId ?? null;
+		explainPathLinkIdSet = new Set<string>(
+			(($uiState as any)?.explainPathLinkIds ?? []) as string[]
+		);
+		explainPathNodeIds = (($uiState as any)?.explainPathNodeIds ?? []) as string[];
+		packetRouteNodeIds = ($uiState?.packetPreview?.nodePath ?? []) as string[];
 	}
+
+	// Screen positions for packet animation — recomputed on path or viewport change
+	$: packetScreenPositions = (() => {
+		void viewportPan;
+		const nodeIds = explainPathNodeIds.length ? explainPathNodeIds : packetRouteNodeIds;
+		if (!nodeIds.length || typeof flowToScreenPosition !== 'function') return [];
+		return nodeIds
+			.map((id) => {
+				const node = flowNodes.find((n) => n.id === id);
+				if (!node) return null;
+				return flowToScreenPosition({ x: node.position.x, y: node.position.y });
+			})
+			.filter((p): p is { x: number; y: number } => p !== null);
+	})();
+
+	// Find the link ID connecting source→via when explain mode is active
+	$: explainEdgeLinkId = (() => {
+		if (!explainSourceId || !explainNexthopId || !topology) return null;
+		const links = topologyLinksArray(topology);
+		const link = links.find((l: any) => {
+			const sId = String(l?.source?.id ?? '');
+			const tId = String(l?.target?.id ?? '');
+			return (
+				(sId === explainSourceId && tId === explainNexthopId) ||
+				(sId === explainNexthopId && tId === explainSourceId)
+			);
+		});
+		return link ? String((link as any)?.id ?? '') : null;
+	})();
 
 	/**
 	 * Bestimmt den Typ eines Simulationssteps.
@@ -346,7 +394,10 @@
 		topo: any,
 		zoom: number,
 		hoverSourceId: string | null,
-		hoverTargetId: string | null
+		hoverTargetId: string | null,
+		exSource: string | null = null,
+		exNexthop: string | null = null,
+		exDest: string | null = null
 	): any[] {
 		const arr = topologyNodesArray(topo);
 
@@ -375,8 +426,22 @@
 
 			const isSource = hoverSourceId === id;
 			const isTarget = hoverTargetId === id;
-			const highlightRole =
-				isSource && isTarget ? 'both' : isSource ? 'source' : isTarget ? 'target' : null;
+			const inExplain = exSource || exNexthop || exDest;
+			const highlightRole = inExplain
+				? (id === exSource
+						? 'explain-source'
+						: id === exNexthop
+							? 'explain-nexthop'
+							: id === exDest
+								? 'explain-dest'
+								: null)
+				: isSource && isTarget
+					? 'both'
+					: isSource
+						? 'source'
+						: isTarget
+							? 'target'
+							: null;
 
 			return {
 				id,
@@ -518,9 +583,17 @@
 			const isSendStep = !disabled && sendStepLinkIdSet.has(id);
 			const isHighlighted = !disabled && uiHighlightedLinkIdSet.has(id);
 			const isActualRoute = !disabled && actualRouteLinkIdSet.has(id);
-
+			const isPathActive = explainPathLinkIdSet.size > 0;
+			const isPathEdge = !disabled && explainPathLinkIdSet.has(id);
+			const isExplainEdge = !disabled && !isPathActive && !!explainEdgeLinkId && id === explainEdgeLinkId;
 			const isGreen = isHighlighted;
-			const isDashed = !isGreen && (isSendStep || isActualRoute);
+			const isDashed = !isGreen && !isExplainEdge && !isPathEdge && (isSendStep || isActualRoute);
+
+			// For explain edge: draw source→nexthop direction as amber with arrow
+			const explainFromSource =
+				isExplainEdge &&
+				((source === explainSourceId && target === explainNexthopId) ||
+					(target === explainSourceId && source === explainNexthopId));
 
 			return {
 				id,
@@ -561,30 +634,68 @@
 				selectable: true,
 				selected: prevEdgeSelected.get(id) ?? false,
 
-				animated: isDashed,
+				// markerEnd: arrow on explain edge pointing toward via (nexthop)
+				markerEnd: isExplainEdge
+					? {
+							type: 'arrowclosed',
+							color: '#f59e0b',
+							width: 22,
+							height: 22
+						}
+					: isPathEdge
+						? {
+								type: 'arrowclosed',
+								color: '#7c3aed',
+								width: 22,
+								height: 22
+							}
+						: undefined,
+
+				animated: isDashed || isPathEdge,
+
 				style: disabled
 					? 'stroke-width: 4; stroke: #94a3b8;'
-					: isGreen
-						? 'stroke-width: 4; stroke: #22c55e;'
-						: isSendStep
-							? 'stroke-width: 4; stroke: #37bce1; stroke-dasharray: 6 6;'
-							: 'stroke-width: 4; stroke: #37bce1;',
+					: isExplainEdge
+						? 'stroke-width: 5; stroke: #f59e0b;'
+						: isPathEdge
+							? 'stroke-width: 5; stroke: #7c3aed;'
+							: isGreen
+								? 'stroke-width: 4; stroke: #22c55e;'
+								: isSendStep
+									? 'stroke-width: 4; stroke: #37bce1; stroke-dasharray: 6 6;'
+									: 'stroke-width: 4; stroke: #37bce1;',
 
-				labelStyle: isGreen
+				labelStyle: isExplainEdge
 					? {
-							background: '#22c55e',
-							border: '1px solid #15803d',
-							boxShadow: '0 4px 10px rgba(21, 128, 61, 0.25)',
-							color: '#ffffff'
+							background: '#f59e0b',
+							border: '1px solid #d97706',
+							boxShadow: '0 4px 10px rgba(245, 158, 11, 0.35)',
+							color: '#ffffff',
+							fontWeight: '700'
 						}
-					: isDashed
+					: isPathEdge
 						? {
-								background: '#37bce1',
-								border: '1px solid #031416',
-								boxShadow: '0 4px 10px rgba(55, 188, 225, 0.25)',
-								color: '#ffffff'
+								background: '#7c3aed',
+								border: '1px solid #5b21b6',
+								boxShadow: '0 4px 10px rgba(124, 58, 237, 0.35)',
+								color: '#ffffff',
+								fontWeight: '700'
 							}
-						: undefined
+						: isGreen
+							? {
+									background: '#22c55e',
+									border: '1px solid #15803d',
+									boxShadow: '0 4px 10px rgba(21, 128, 61, 0.25)',
+									color: '#ffffff'
+								}
+							: isDashed
+								? {
+										background: '#37bce1',
+										border: '1px solid #031416',
+										boxShadow: '0 4px 10px rgba(55, 188, 225, 0.25)',
+										color: '#ffffff'
+									}
+								: undefined
 			};
 		});
 	}
@@ -594,7 +705,10 @@
 			topology,
 			viewportZoom,
 			hoverSourceNodeId,
-			hoverTargetNodeId
+			hoverTargetNodeId,
+			explainSourceId,
+			explainNexthopId,
+			explainDestId
 		);
 	}
 
@@ -609,8 +723,7 @@
 		});
 	}
 
-	$: if (topology || highlightedLinkIdSet) {
-		// Force to re-render the edges, when hightlightedLinkIdSet changes
+	$: if (topology || highlightedLinkIdSet || explainEdgeLinkId !== undefined || explainPathLinkIdSet) {
 		flowEdges = buildFlowEdgesFromTopology(topology, flowNodes);
 	}
 
@@ -1048,16 +1161,20 @@
 			bind:nodes={flowNodes}
 			bind:edges={flowEdges}
 			onmove={() => {
-				const z = Number(getViewport?.().zoom ?? 1);
+				const vp = getViewport?.();
+				const z = Number(vp?.zoom ?? 1);
 				if (Number.isFinite(z) && z > 0) viewportZoom = z;
+				viewportPan = { x: vp?.x ?? 0, y: vp?.y ?? 0 };
 				if (hoverNodeId) {
 					const node = typeof getNode === 'function' ? getNode(hoverNodeId) : null;
 					if (node) updateHoverTooltip(node);
 				}
 			}}
 			oninit={() => {
-				const z = Number(getViewport?.().zoom ?? 1);
+				const vp = getViewport?.();
+				const z = Number(vp?.zoom ?? 1);
 				if (Number.isFinite(z) && z > 0) viewportZoom = z;
+				viewportPan = { x: vp?.x ?? 0, y: vp?.y ?? 0 };
 			}}
 			onnodepointerenter={({ node }) => {
 				hoverNodeId = String(node?.id ?? '');
@@ -1098,6 +1215,10 @@
 		></SvelteFlow>
 	{:else}
 		<div class="ssr-placeholder"></div>
+	{/if}
+
+	{#if packetScreenPositions.length >= 2}
+		<PacketAnimation positions={packetScreenPositions} />
 	{/if}
 
 	{#if hoverTooltip.visible}
