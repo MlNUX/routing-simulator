@@ -859,7 +859,7 @@
 				</div>
 			</div>
 		{:else}
-			<div class="compact-body overflow-y-scroll">
+			<div class="compact-body">
 				<div class="compact-controls">
 					<label class="compact-control">
 						<span class="control-label">Router</span>
@@ -1225,7 +1225,7 @@
 		padding: 12px 14px;
 		flex: 1;
 		min-height: 0;
-		overflow: auto;
+		overflow: hidden;
 	}
 	.full-controls {
 		display: grid;
@@ -1237,6 +1237,7 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 		gap: 12px;
+		flex-shrink: 0;
 	}
 	.compact-control {
 		display: grid;
@@ -1291,8 +1292,9 @@
 	.compact-grid-scroll {
 		max-width: 100%;
 		overflow-x: auto;
-		overflow-y: hidden;
-		flex-shrink: 0;
+		overflow-y: auto;
+		flex: 1;
+		min-height: 0;
 		padding-bottom: 10px;
 		scrollbar-gutter: stable both-edges;
 		scrollbar-width: auto;
@@ -1619,7 +1621,10 @@
 		}
 
 		.compact-grid-scroll {
+			flex: none;
+			min-height: unset;
 			overflow-x: auto;
+			overflow-y: hidden;
 			-webkit-overflow-scrolling: touch;
 			padding-bottom: 14px;
 		}
